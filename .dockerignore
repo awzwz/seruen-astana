@@ -1,0 +1,11 @@
+.venv
+.git
+.env
+.env.*
+data/cache
+data/events
+**/__pycache__
+deploy/secrets
+tests
+*.log
+.DS_Store
