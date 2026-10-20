@@ -98,7 +98,20 @@ async def route(p: dict) -> dict:
     dest = None
     if c.destination:
         dest = AIRPORT if c.destination == "airport" else TRAIN_STATION
-        end_min = {x.poi_id: taxi_min(haversine_m(x.lat, x.lon, *dest)) for x in pois}
+        # real car time with traffic from 2GIS for the origin, adjusted per stop by the extra distance (+10 % margin)
+        base = None
+        try:
+            opt = (await call("places-live", "/v1/taxi", {"from": list(o), "to": list(dest)}, timeout=5)).get("option")
+            base = opt["minutes"] if opt else None
+        except Exception:
+            base = None
+        d0 = haversine_m(*o, *dest)
+        if base:
+            end_min = {x.poi_id: max(5.0, (base + (haversine_m(x.lat, x.lon, *dest) - d0) * TAXI_DETOUR / 1000 / TAXI_KMH * 60) * 1.1)
+                       for x in pois}
+            method += " · такси до цели по 2GIS"
+        else:
+            end_min = {x.poi_id: taxi_min(haversine_m(x.lat, x.lon, *dest)) * 1.1 for x in pois}
     budget = max(15, c.time_budget_min - c.reserve_min)
     ids, obj, timeline = best_route(origin_min, lambda a, b: mins(idx[a], idx[b]), stops, start, budget,
                                     max_stops=(c.max_stops if c.want_route else 1), short_mode=(ctx.mode != "walk"), end_min=end_min)
