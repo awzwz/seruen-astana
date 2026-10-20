@@ -41,7 +41,7 @@ _PATTERNS: list[tuple[str, str]] = [
     ("power", r"розетк|ноутбук|зарядит|wi-?fi|вайфай|интернет|socket|laptop|charge|outlet"),
     ("shopping", r"торгов|магазин|шопинг|купить|сувенир|сауда|дүкен|mall|shop|souvenir"),
     ("events", r"событи|афиш|концерт|спектакл|фестивал|іс-шара|event|concert|show|festival"),
-    ("landmark", r"достопримеч|главн|символ|байтерек|бәйтерек|көрікті|landmark|sight|must.see"),
+    ("landmark", r"достопримеч|главн|символ|байтерек|бәйтерек|көрікті|посмотреть|увидеть|көру|көрсет|landmark|sight|must.see|to see"),
     ("attraction", r"аттракц|развлеч|океанариум|аквапарк|ойын|attraction|aquarium|fun"),
     ("sport", r"спорт|каток|бассейн|sport|skating|pool|gym"),
     ("religious", r"мечет|храм|собор|церк|мешіт|mosque|church|cathedral"),
