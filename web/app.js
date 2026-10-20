@@ -818,6 +818,8 @@
     const feats = r.route.legs.map((leg, i) => {
       const hasGeom = Array.isArray(leg.geometry) && leg.geometry.length >= 2;
       let coords = hasGeom ? leg.geometry.map((p) => [Number(p[0]), Number(p[1])]) : [pt(leg.from_id), pt(leg.to_id)].filter(Boolean);
+      // inside one building 2GIS walks via the entrance and draws a fork: a straight line reads better
+      if (hasGeom && Number(leg.meters) < 150 && byId[leg.to_id]) coords = [pt(leg.from_id), pt(leg.to_id)].filter(Boolean);
       // the first leg starts at the exact local point, which never left the device
       if (i === 0 && !byId[leg.from_id] && state.origin) coords = [[state.origin.lon, state.origin.lat]].concat(coords);
       return {type: 'Feature', properties: {approx: !!leg.approx || !hasGeom}, geometry: {type: 'LineString', coordinates: coords}};
