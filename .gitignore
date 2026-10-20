@@ -12,3 +12,4 @@ kubeconfig*
 deploy/secrets/
 .pytest_cache/
 node_modules/
+design/shots/
