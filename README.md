@@ -115,41 +115,36 @@ sequenceDiagram
 15 онлайн-сервисов и 9 фоновых воркеров в одном кластере DigitalOcean Kubernetes. Один Docker-образ на все роли, роль задаёт переменная `SERVICE`. Тот же код запускается и одним процессом (`make dev`) — для разработки и демо без кластера.
 
 ```mermaid
-flowchart LR
-    U([Браузер · телефон]) -->|HTTPS| ING[ingress-nginx]
-    ING --> ORC[orchestrator]
+flowchart TB
+    U([Браузер · телефон]) -->|HTTPS · только клетка ~150 м| ORC[orchestrator<br/>поток SSE]
 
-    subgraph online [Онлайн-сервисы · FastAPI · Linkerd mTLS]
-        ORC --> NLU[nlu] & CTX[context] & RET[retrieval] & RNK[ranking] & RTE[routing]
-        ORC --> EXP[explain] --> GRD[guard]
-        ORC --> CAT[catalog-api] & EVT[events-api] & SES[session] & FB[feedback-api]
-        RET & RTE & ORC --> PL[places-live · шлюз 2GIS]
-        NLU & EXP & RET --> LLM[llm-gateway]
+    subgraph understand [Понять запрос]
+        direction LR
+        NLU[nlu] ~~~ CTX[context<br/>время · закат · погода] ~~~ SES[session]
+    end
+    subgraph find [Найти, оценить, проложить]
+        direction LR
+        RET[retrieval] ~~~ RNK[ranking] ~~~ RTE[routing] ~~~ CAT[catalog-api] ~~~ EVT[events-api]
+    end
+    subgraph explain [Объяснить и проверить]
+        direction LR
+        EXP[explain] ~~~ GRD[guard]
     end
 
-    LLM -->|тексты, эмбеддинги, голос| OAI[(OpenAI)]
-    PL -->|места, адреса, маршруты, транспорт, такси| DG[(2GIS API)]
+    ORC --> understand
+    ORC --> find
+    ORC --> explain
+    find --> PL[places-live · шлюз 2GIS] --> DG[(2GIS API)]
+    understand --> LLM[llm-gateway]
+    explain --> LLM
+    LLM --> OAI[(OpenAI)]
+    find --> DB[(PostgreSQL + PostGIS · OpenSearch · Redis · OSRM)]
 
-    subgraph data [Хранилища]
-        PG[(PostgreSQL + PostGIS)]
-        OS[(OpenSearch: BM25 + k-NN)]
-        RD[(Redis)]
-        CH[(ClickHouse)]
-        OSRM[(OSRM)]
+    subgraph pipeline [Сбор данных через Kafka]
+        direction LR
+        CJ[6 сборщиков · CronJob] --> NRM[normalizer] --> DD[dedup] --> EMB[embedder] --> IDX[indexer]
     end
-    RET --> OS
-    CAT --> PG
-    SES --> RD
-    RTE --> OSRM
-
-    subgraph pipeline [Сбор данных]
-        CJ[6 сборщиков · CronJob] --> K{{Kafka}}
-        K --> NRM[normalizer] --> DD[dedup] --> EMB[embedder] --> IDX[indexer]
-    end
-    DD --> PG
-    IDX --> OS
-    ORC -.->|reco.served| K
-    K -.-> AN[analytics] --> CH
+    pipeline --> DB
 ```
 
 | Слой | Что |
