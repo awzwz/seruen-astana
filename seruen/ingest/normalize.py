@@ -118,6 +118,11 @@ _CONCERT_RX = re.compile(r"концерт|филармон|concert|hall|зал\b
 # ======================================================================= keyword rules (wikidata types, wikivoyage, visitastana)
 KW_RULES: list[tuple[str, str]] = [
     (r"mosque|мечеть|мешіт|church|cathedral|собор|церк|храм|synagogue|синагог|place of worship|костёл|костел", "religious"),
+    # visitastana «experiences» are not landmarks: a wine boutique, a lunch, a master class, archery
+    (r"\blunch\b|\bdinner\b|обед в|ужин в|ресторан|restaurant", "restaurant"),
+    (r"wine|\bвин(о|а|ный|ная)|бутик|boutique", "other"),
+    (r"master.?class|мастер-класс|workshop|воркшоп", "attraction"),
+    (r"archery|стрельб|спортивн(ый|ая) клуб|sports club", "sport"),
     (r"oceanarium|aquarium|океанариум|zoo\b|зоопарк|amusement park|water park|аквапарк|theme park|ailand|duman|думан", "attraction"),
     (r"museum|музей|мұражай|planetarium|планетарий", "museum"),
     (r"art gallery|gallery|галере", "gallery"),
