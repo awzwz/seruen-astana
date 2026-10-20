@@ -10,7 +10,7 @@ WANT_MAP: dict[str, tuple[set[str], set[str]]] = {
     "food":      ({"restaurant", "cafe", "fast_food", "coffee", "market"}, {"food"}),
     "museum":    ({"museum", "gallery"}, {"culture"}),
     "culture":   ({"museum", "gallery", "theatre", "concert", "landmark", "religious"}, {"culture"}),
-    "park":      ({"park", "embankment", "playground", "viewpoint"}, {"outdoor"}),
+    "park":      ({"park", "embankment", "viewpoint"}, {"outdoor"}),
     "view":      ({"viewpoint", "landmark", "embankment", "monument"}, {"view", "photo"}),
     "night":     ({"bar", "nightclub", "cinema", "concert", "theatre", "restaurant"}, {"night"}),
     "unusual":   ({"attraction", "gallery", "landmark", "viewpoint", "monument"}, {"unusual"}),
@@ -81,6 +81,8 @@ def parse_budget(text: str) -> int | None:
         return int(m.group(1))
     if re.search(r"полчаса|жарты сағат|half an hour", t):
         return 30
+    if re.search(r"пар[уа] час|пару-тройку час|екі сағат|couple of hours|a few hours", t):
+        return 120
     if re.search(r"полтора часа|бір жарым сағат|hour and a half", t):
         return 90
     if re.search(r"\bчас\b|\bсағат\b|an hour|one hour", t):
@@ -116,7 +118,15 @@ def parse_rules(text: str, chips: Chips, lang: str) -> Constraints:
     elif re.search(r"коляск|арба|stroller|pram", t):
         c.mobility = "stroller"
     c.night = "night" in wants
+    if re.search(r"турист|впервые|первый раз|приезж|гост[ья] город|турис|tourist|first time|visiting|visitor|қонақ", t):
+        c.tourist = True
+        for w in ("landmark", "culture"):
+            if w not in wants:
+                wants.append(w)
     c.wants = [w for w in wants if w != "kids"] if c.kids else wants
+    walk_words = re.search(r"прогул|погуля|маршрут|пройт|серуен|walk|stroll|route|\bпешком", t)
+    if c.wants and set(c.wants) <= {"coffee", "quiet", "power", "food"} and not walk_words:
+        c.want_route = False
     return apply_chips(c, chips)
 
 

@@ -62,6 +62,16 @@ def _sources(poi: POI) -> list[str]:
     return seen
 
 
+def _event_label(e: dict, lang: str) -> str:
+    t = e["start"][11:16]
+    when = {"ru": "весь день", "kk": "күні бойы", "en": "all day"}[lang] if t in ("00:00", "") else \
+        {"ru": f"начало в {t}", "kk": f"{t}-де басталады", "en": f"starts at {t}"}[lang]
+    price = (e.get("price_kzt") or "").strip()
+    if price and price.replace(" ", "").isdigit():
+        price = {"ru": f"от {price} ₸", "kk": f"{price} ₸-ден", "en": f"from {price} ₸"}[lang]
+    return when + (" · " + price if price else "") + " · sxodim.com"
+
+
 def _company(c: Constraints, lang: str) -> str:
     parts = []
     if c.kids:
@@ -214,6 +224,24 @@ async def recommend_stream(req: RecommendRequest):
             cards.append(card)
             matched_map[pid] = r.get("matched", [])
             reasons_map[pid] = code_reasons(card, c, ctx, matched_map[pid])
+        # places the user named but that are beyond walking reach ("Думан" from EXPO) → honest card with a taxi hint
+        for far in cand.get("named_far", [])[:1]:
+            poi = POI(**far["poi"])
+            if poi.poi_id in {x.poi_id for x in cards} or len(cards) >= 3:
+                continue
+            taxi_min = int(far["distance_m"] * 1.25 / 1000 / 55 * 60) + 5
+            hs = status_at(poi, start + timedelta(minutes=taxi_min), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
+            far_lbl = {"ru": f" · далеко пешком, на такси ≈ {taxi_min} мин", "kk": f" · жаяу алыс, таксимен ≈ {taxi_min} мин",
+                       "en": f" · too far to walk, ≈ {taxi_min} min by taxi"}[lang]
+            cat_meta = CATEGORIES.get(poi.category, CATEGORIES["other"])
+            cards.append(Card(poi_id=poi.poi_id, name=poi.name.best(lang), category=poi.category, category_label=cat_meta[lang],
+                              lat=poi.lat, lon=poi.lon, distance_m=int(far["distance_m"]),
+                              walk_min=walk_estimate(far["distance_m"], slow)[1], visit_min=poi.visit_min,
+                              hours=hs.model_copy(update={"label": hs.label + far_lbl}), source_label=", ".join(_sources(poi)[:3]),
+                              sources=_sources(poi), tags=poi.walk_tags, status=poi.status, role="alternative",
+                              description=poi.description.text if poi.description else None))
+            matched_map[poi.poi_id] = []
+            reasons_map[poi.poi_id] = code_reasons(cards[-1], c, ctx, [])
         # events from the afisha (only when the user asked for events or a night out)
         if ("events" in c.wants or c.night) and cand.get("events"):
             for ev in cand["events"][: max(1, 3 - len(cards))]:
@@ -224,7 +252,7 @@ async def recommend_stream(req: RecommendRequest):
                                   walk_min=walk_estimate(ev["distance_m"], slow)[1], visit_min=90,
                                   hours=status_at(POI(poi_id="x", name={"ru": "x"}, lat=e["lat"], lon=e["lon"], geo_src="x", category="concert"),
                                                   start, 90, lang)
-                                  .model_copy(update={"status": "open", "label": e["start"][11:16] + (" · " + e["price_kzt"] if e.get("price_kzt") else ""), "level": "medium"}),
+                                  .model_copy(update={"status": "open", "label": _event_label(e, lang), "level": "medium"}),
                                   source_label="sxodim.com", sources=["sxodim.com"], url=e.get("url"),
                                   event={"title": e["title"], "start": e["start"], "end": e.get("end"), "price": e.get("price_kzt"),
                                          "venue": e.get("venue_name"), "url": e.get("url")}))

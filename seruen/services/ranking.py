@@ -20,7 +20,9 @@ async def rank(p: dict) -> dict:
         rows.append((poi.poi_id, s, poi.category, parts, matched, minutes))
     rows.sort(key=lambda r: -r[1])
     by_id = {r[0]: r for r in rows}
-    top = diversify([(r[0], r[1], r[2]) for r in rows], k=int(p.get("k", 15)))
+    names = {cand["poi"]["poi_id"]: (cand["poi"]["name"].get("ru") or cand["poi"]["name"].get("en") or "").lower()
+             for cand in p["candidates"]}
+    top = diversify([(r[0], r[1], r[2]) for r in rows], k=int(p.get("k", 15)), names=names)
     return {"ranked": [{"poi_id": pid, "score": by_id[pid][1], "parts": by_id[pid][3], "matched": by_id[pid][4],
                         "est_walk_min": by_id[pid][5]} for pid in top],
             "weights": W, "considered": len(rows)}

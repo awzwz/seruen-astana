@@ -59,8 +59,9 @@ S = [
      "expect": {"budget": 120}},
     {"id": 10, "title": "Старые названия: «Нур Алем» и «Думан»", "at": "expo", "lang": "ru",
      "text": "Хочу в Нур Алем или в Думан", "sim": {"datetime": "2026-10-22T12:00", "temp_c": 6, "wind_kmh": 10}, "expect": {}},
-    {"id": 11, "title": "Что сегодня вечером? (афиша)", "at": "opera", "lang": "ru",
-     "text": "Какие события сегодня вечером?", "sim": {"datetime": "2026-10-22T18:00", "temp_c": 3, "wind_kmh": 10}, "expect": {}},
+    {"id": 11, "title": "Что сегодня вечером? (афиша sxodim, у AITU)", "at": "aitu", "lang": "ru",
+     "text": "Какие события сегодня вечером?", "sim": {"datetime": "2026-10-22T18:30", "temp_c": 3, "wind_kmh": 10},
+     "expect": {"has_event": True}},
     {"id": 12, "title": "Мороз −25 °C, сильный ветер", "at": "baiterek", "lang": "ru",
      "text": "Хочу погулять час", "sim": {"datetime": "2026-12-15T15:00", "temp_c": -25, "wind_kmh": 40},
      "expect": {"mode": "indoor", "prefer_indoor": True}},
@@ -194,6 +195,8 @@ def check(sc: dict, r: dict) -> tuple[list[str], list[str]]:
         chk("тексты из шаблонов", all(x.get("template") for x in r["texts"]))
     if "tz" in exp:
         chk("время Астаны UTC+5", ctx.get("local_time", "").endswith(exp["tz"]))
+    if exp.get("has_event"):
+        chk("есть событие из афиши", any(x.get("kind") == "event" for x in cards))
     if exp.get("no_injection"):
         joined = " ".join(x["why"] + " " + x["what_to_do"] for x in r["texts"]).lower()
         chk("инструкция из данных проигнорирована", "24/7" not in joined and "100%" not in joined and "8700" not in joined and "best place" not in joined)
@@ -220,7 +223,7 @@ def poison_snapshot(lat: float, lon: float):
     snap.lon = np.append(snap.lon, p.lon)
     from seruen.common.catalog import tokens
 
-    snap.name_tokens.append(tokens("Кафе Тест Test cafe"))
+    snap.name_tokens.append([tokens("Кафе Тест"), tokens("Test cafe")])
     if snap.emb is not None:
         v = snap.emb[[i for i, x in enumerate(snap.pois[:-1]) if x.category == "coffee"][:1] or [0]].mean(axis=0)
         snap.emb = np.vstack([snap.emb, v / (np.linalg.norm(v) or 1)])

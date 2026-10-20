@@ -1,0 +1,122 @@
+[
+  {
+    "id": "baiterek",
+    "poi_id": "osm:way/230401645",
+    "name": {
+      "ru": "Байтерек",
+      "kk": "Бәйтерек",
+      "en": "Baiterek"
+    },
+    "lat": 51.12829,
+    "lon": 71.430454,
+    "geo_src": "osm"
+  },
+  {
+    "id": "khan_shatyr",
+    "poi_id": "osm:way/460703779",
+    "name": {
+      "ru": "Хан Шатыр",
+      "kk": "Хан Шатыр",
+      "en": "Khan Shatyr"
+    },
+    "lat": 51.132574,
+    "lon": 71.403814,
+    "geo_src": "osm"
+  },
+  {
+    "id": "mega_silk_way",
+    "poi_id": "osm:way/499328514",
+    "name": {
+      "ru": "Мега Силк Уэй",
+      "kk": "Mega Silk Way",
+      "en": "Mega Silk Way"
+    },
+    "lat": 51.089034,
+    "lon": 71.407314,
+    "geo_src": "osm"
+  },
+  {
+    "id": "alem_ai",
+    "poi_id": "osm:way/454857501",
+    "name": {
+      "ru": "Alem.ai (бывш. Нур Алем)",
+      "kk": "Alem.ai (бұрынғы Нұр Әлем)",
+      "en": "Alem.ai (former Nur Alem)"
+    },
+    "lat": 51.089232,
+    "lon": 71.416226,
+    "geo_src": "osm"
+  },
+  {
+    "id": "hazrat_sultan",
+    "poi_id": "osm:way/240860325",
+    "name": {
+      "ru": "Мечеть Хазрет Султан",
+      "kk": "Әзірет Сұлтан мешіті",
+      "en": "Hazrat Sultan Mosque"
+    },
+    "lat": 51.125397,
+    "lon": 71.472091,
+    "geo_src": "osm"
+  },
+  {
+    "id": "astana_opera",
+    "poi_id": "osm:way/917478479",
+    "name": {
+      "ru": "Астана Опера",
+      "kk": "Астана Опера",
+      "en": "Astana Opera"
+    },
+    "lat": 51.135579,
+    "lon": 71.410684,
+    "geo_src": "osm"
+  },
+  {
+    "id": "nurzhol_boulevard",
+    "poi_id": "osm:way/182131358",
+    "name": {
+      "ru": "Бульвар Нуржол",
+      "kk": "Нұржол бульвары",
+      "en": "Nurzhol Boulevard"
+    },
+    "lat": 51.126478,
+    "lon": 71.437967,
+    "geo_src": "osm"
+  },
+  {
+    "id": "astana_it_university",
+    "poi_id": "osm:node/10575843769",
+    "name": {
+      "ru": "Astana IT University",
+      "kk": "Astana IT University",
+      "en": "Astana IT University"
+    },
+    "lat": 51.090861,
+    "lon": 71.418415,
+    "geo_src": "osm"
+  },
+  {
+    "id": "nurly_zhol",
+    "poi_id": "osm:way/424980293",
+    "name": {
+      "ru": "Вокзал Нурлы Жол",
+      "kk": "Нұрлы жол вокзалы",
+      "en": "Nurly Zhol railway station"
+    },
+    "lat": 51.11297,
+    "lon": 71.531981,
+    "geo_src": "osm"
+  },
+  {
+    "id": "airport_nqz",
+    "poi_id": "osm:way/507841374",
+    "name": {
+      "ru": "Аэропорт Нурсултан Назарбаев",
+      "kk": "Нұрсұлтан Назарбаев халықаралық әуежайы",
+      "en": "Nursultan Nazarbayev International Airport"
+    },
+    "lat": 51.025917,
+    "lon": 71.465136,
+    "geo_src": "osm"
+  }
+]

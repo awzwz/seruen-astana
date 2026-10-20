@@ -197,6 +197,7 @@ class Constraints(BaseModel):
     reserve_min: int = 0           # time to keep at the end (flight, meeting)
     destination: Optional[Literal["airport", "train_station"]] = None   # where the user must be at the end
     night: bool = False
+    tourist: bool = False
     query_text: str = ""
     lang: Lang = "ru"
     parsed_by: Literal["llm", "rules"] = "rules"

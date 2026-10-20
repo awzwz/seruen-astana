@@ -41,7 +41,7 @@ async def parse(p: dict) -> dict:
             c.mobility = pc.mobility
         c.avoid = sorted(set(c.avoid) | set(pc.avoid))
     covered = bool(c.wants or c.kids or c.destination or c.mobility != "walk" or parse_budget(text))
-    if text and not p.get("no_ai") and len(text) > 3 and not (covered and len(text.split()) <= 12):
+    if text and not p.get("no_ai") and len(text) > 3 and not covered:
         try:
             r = await call("llm-gateway", "/v1/complete", {
                 "purpose": "parse", "system": SYSTEM, "user": f"<query>{text}</query>",

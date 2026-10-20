@@ -9,7 +9,7 @@ shortened visits cost a little in the objective so full visits win when they fit
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import permutations
 from typing import Callable
@@ -25,6 +25,7 @@ class Stop:
     visit_min: int
     indoor: bool
     open_ok: Callable[[datetime, int], bool]   # (arrive, visit_min) -> can visit fully
+    wants: frozenset = field(default_factory=frozenset)   # which of the user's wishes this stop covers
 
     @property
     def vmin(self) -> int:
@@ -68,6 +69,8 @@ def _try(perm, origin_min, pair_min, start, budget, short_mode, end_min):
         obj += s.score * (0.85 + 0.15 * v / s.visit_min)
     used = walk + sum(visits)
     obj += 0.05 * min(1.0, used / max(1, budget))
+    covered = frozenset().union(*[s.wants for s in perm])
+    obj += 0.12 * max(0, len(covered) - 1)        # a group with different wishes gets a stop for each
     return obj, timeline
 
 

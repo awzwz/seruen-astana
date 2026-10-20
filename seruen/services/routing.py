@@ -13,9 +13,15 @@ from seruen.common.config import settings
 from seruen.common.geo import SLOW_M_PER_MIN, WALK_M_PER_MIN, haversine_m, walk_estimate
 from seruen.common.models import CATEGORIES, POI, Constraints, Context, Leg, Route
 from seruen.engine.hours import status_at
+from seruen.engine.ranking import NIGHT_CATS
 from seruen.engine.route import AIRPORT, TRAIN_STATION, Stop, best_route
 
-TAXI_KMH = 30.0     # city average incl. waiting (heuristic)
+TAXI_KMH = 55.0     # Astana arterials; +5 min to get a car (airport → centre measured 15–22 min by car)
+TAXI_DETOUR = 1.25
+
+
+def taxi_min(meters: float) -> float:
+    return meters * TAXI_DETOUR / 1000 / TAXI_KMH * 60 + 5
 
 
 async def osrm_table(points: list[tuple[float, float]]) -> tuple[list[list[float]] | None, str]:
@@ -59,6 +65,7 @@ async def route(p: dict) -> dict:
     o = (p["origin"]["lat"], p["origin"]["lon"])
     pois = [POI(**x) for x in p["pois"]][:12]
     scores = {x["poi_id"]: x["score"] for x in p["ranked"]}
+    wants = {x["poi_id"]: frozenset(x.get("matched", [])) for x in p["ranked"]}
     slow = c.kids > 0 or c.mobility != "walk"
     speed_scale = (WALK_M_PER_MIN / SLOW_M_PER_MIN) if slow else 1.0
     pts = [o] + [(x.lat, x.lon) for x in pois]
@@ -80,20 +87,21 @@ async def route(p: dict) -> dict:
             if st.status in ("closed", "closes_soon"):
                 return False
             if st.status == "unknown" and (ctx.is_dark or ctx.is_holiday):
-                return False
+                return bool(c.night and poi.category in NIGHT_CATS)   # at night bars rarely publish hours: allowed, labelled
             return True
         return ok
 
     stops = [Stop(id=x.poi_id, score=scores.get(x.poi_id, 0.1), visit_min=x.visit_min,
-                  indoor=CATEGORIES.get(x.category, {}).get("indoor", True), open_ok=open_ok_factory(x)) for x in pois]
+                  indoor=CATEGORIES.get(x.category, {}).get("indoor", True), open_ok=open_ok_factory(x),
+                  wants=wants.get(x.poi_id, frozenset())) for x in pois]
     end_min = None
     dest = None
     if c.destination:
         dest = AIRPORT if c.destination == "airport" else TRAIN_STATION
-        end_min = {x.poi_id: haversine_m(x.lat, x.lon, *dest) * 1.4 / 1000 / TAXI_KMH * 60 for x in pois}
+        end_min = {x.poi_id: taxi_min(haversine_m(x.lat, x.lon, *dest)) for x in pois}
     budget = max(15, c.time_budget_min - c.reserve_min)
     ids, obj, timeline = best_route(origin_min, lambda a, b: mins(idx[a], idx[b]), stops, start, budget,
-                                    max_stops=c.max_stops, short_mode=(ctx.mode != "walk"), end_min=end_min)
+                                    max_stops=(c.max_stops if c.want_route else 1), short_mode=(ctx.mode != "walk"), end_min=end_min)
     walk = {x.poi_id: {"minutes": round(origin_min[x.poi_id]), "approx": mat is None} for x in pois}
     legs: list[Leg] = []
     if ids:

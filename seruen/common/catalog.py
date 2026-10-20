@@ -41,7 +41,9 @@ class Snapshot:
         self.by_id = {x.poi_id: x for x in self.pois}
         self.lat = np.array([x.lat for x in self.pois], dtype=np.float64)
         self.lon = np.array([x.lon for x in self.pois], dtype=np.float64)
-        self.name_tokens = [tokens(" ".join(filter(None, [x.name.ru, x.name.kk, x.name.en, *x.name.alt]))) for x in self.pois]
+        # one token set per name variant: "Нур Алем" must fully match the alias, not 2 of 20 words of all names
+        self.name_tokens = [[t for t in (tokens(n) for n in filter(None, [x.name.ru, x.name.kk, x.name.en, *x.name.alt])) if t]
+                            for x in self.pois]
         self.emb = None
         ep, ip = d / "embeddings.npy", d / "embedding_ids.json"
         if ep.exists() and ip.exists():

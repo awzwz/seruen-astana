@@ -39,11 +39,15 @@ async def query_vector(text: str) -> np.ndarray | None:
         return None
 
 
-def _lexical(qtok: set[str], name_tok: set[str]) -> float:
-    if not qtok or not name_tok:
+def _lexical(qtok: set[str], variants: list[set[str]]) -> float:
+    """Best share of a name variant's words found in the query ("Нур Алем" → alias of Alem.ai = 1.0)."""
+    if not qtok or not variants:
         return 0.0
-    hit = sum(1 for q in qtok for n in name_tok if q == n or (len(q) > 4 and (q in n or n in q)))
-    return min(1.0, hit / max(1, len(name_tok)))
+    best = 0.0
+    for name_tok in variants:
+        hit = sum(1 for n in name_tok if any(q == n or (len(q) > 4 and len(n) > 4 and (q in n or n in q)) for q in qtok))
+        best = max(best, hit / max(1, len(name_tok)))
+    return min(1.0, best)
 
 
 def _local(lat, lon, radius, c: Constraints, ctx: Context, qvec, qtext) -> tuple[list[dict], Counter]:
@@ -55,12 +59,12 @@ def _local(lat, lon, radius, c: Constraints, ctx: Context, qvec, qtext) -> tuple
     sem_all = (snap.emb[idx] @ qvec) if (qvec is not None and snap.emb is not None and len(idx)) else None
     for k, (i, d) in enumerate(zip(idx, dist)):
         poi = snap.pois[int(i)]
-        why = hard_filter(poi, c, ctx)
+        lex = _lexical(qtok, snap.name_tokens[int(i)])
+        why = hard_filter(poi, c, ctx, lex)
         if why:
             excluded[why] += 1
             continue
         sem = float(sem_all[k]) if sem_all is not None else 0.0
-        lex = _lexical(qtok, snap.name_tokens[int(i)])
         mw = matched_wants(poi, c)
         pre = 0.5 * sem + 0.3 * lex + 0.2 * (1.0 if mw else 0.0)
         out.append({"poi": poi, "distance_m": float(d), "semantic": sem, "lexical": lex, "_pre": pre})
@@ -102,7 +106,7 @@ def _opensearch(lat, lon, radius, c: Constraints, ctx: Context, qvec, qtext) -> 
     out = []
     for pid, e in hits.items():
         poi = POI(**e["src"]["data"])
-        why = hard_filter(poi, c, ctx)
+        why = hard_filter(poi, c, ctx, e["lexical"] if e["lexical"] >= 0.6 else 0.0)
         if why:
             excluded[why] += 1
             continue
@@ -112,6 +116,30 @@ def _opensearch(lat, lon, radius, c: Constraints, ctx: Context, qvec, qtext) -> 
         out.append({"poi": poi, "distance_m": d, "semantic": e["semantic"], "lexical": e["lexical"], "_pre": pre})
     out.sort(key=lambda x: -x["_pre"])
     return out[:LIMIT], excluded
+
+
+GENERIC = {"vecher", "vecherom", "utro", "den", "noch", "kofe", "kafe", "park", "tsentr", "ploshad", "mesto", "gorod",
+           "bar", "dom", "muzei", "teatr", "kino", "skver", "sobytiya", "segodnya", "hochu", "ryadom", "astana", "cafe",
+           "coffee", "museum", "center", "centre", "city", "event", "events", "tonight", "today"}
+
+
+def named_far(lat, lon, radius, c: Constraints) -> list[dict]:
+    """Places the user named explicitly ("Нур Алем", "Думан") that lie beyond walking reach.
+    Exact word match only and no generic words, so «вечером» never finds a café called «Вечер»."""
+    qtok = {t for t in tokens(c.query_text) if t not in GENERIC and len(t) >= 4}
+    if not qtok:
+        return []
+    snap = snapshot()
+    out = []
+    for i, poi in enumerate(snap.pois):
+        variants = [v for v in snap.name_tokens[i] if v and not v <= GENERIC]
+        lex = max((sum(1 for n in v if n in qtok) / len(v) for v in variants), default=0.0)
+        if lex >= 0.6 and poi.status != "closed":
+            d = haversine_m(lat, lon, poi.lat, poi.lon)
+            if d > radius:
+                out.append({"poi": poi.model_dump(), "distance_m": round(d), "semantic": 0.0, "lexical": round(lex, 3)})
+    out.sort(key=lambda x: (-x["lexical"], x["distance_m"]))
+    return out[:2]
 
 
 def events_near(lat, lon, radius, now: datetime, horizon_min: int) -> list[dict]:
@@ -165,6 +193,7 @@ async def candidates(p: dict) -> dict:
         "candidates": [{"poi": r["poi"].model_dump(), "distance_m": round(r["distance_m"]), "semantic": round(r["semantic"], 4),
                         "lexical": round(r["lexical"], 4)} for r in rows],
         "events": evs,
+        "named_far": named_far(lat, lon, radius, c),
         "stats": {"backend": backend, "radius_m": round(radius), "expanded": expanded, "kept": len(rows),
                   "excluded": dict(excluded), "vector": qvec is not None, "ms": round((time.perf_counter() - t0) * 1000)},
     }
