@@ -82,26 +82,21 @@
 sequenceDiagram
     autonumber
     participant B as Браузер
-    participant O as orchestrator
-    participant N as nlu + context
-    participant R as retrieval + ranking
-    participant G as places-live (2GIS)
-    participant RT as routing
-    participant AI as explain + guard
+    participant O as Seruen
+    participant G as 2GIS
+    participant AI as OpenAI
 
-    B->>O: клетка ~150 м, текст, фильтры, язык
-    O->>N: понять запрос · время, закат, погода
-    N-->>O: условия (дети, бюджет, интересы) · режим погоды
-    O->>R: кандидаты рядом: гео + BM25 + векторы
-    R->>G: живые часы, рейтинг, доступность
-    G-->>R: места 2GIS (не сохраняются)
-    R-->>O: оценка и разнообразие
-    O->>RT: маршрут до 3 остановок
-    RT-->>O: пешие пути 2GIS, окна работы, тёплые остановки
+    B->>O: клетка ~150 м + «мы с ребёнком, у нас час»
+    Note over O: понять запрос · время, закат, погода, праздники
+    O->>O: свои 2 702 места рядом: гео + слова + смысл
+    O->>G: живые часы, рейтинг, пешие пути
+    G-->>O: свежие данные (не сохраняются)
+    Note over O: оценка · маршрут до 3 остановок · фильтры
     O-->>B: карточки с фактами (≈ 1–2 с)
-    O->>AI: факты о выбранных ID
-    AI-->>O: проверенный текст или шаблон
-    O-->>B: «почему», «что делать», «Как я выбирал»
+    O->>AI: факты только о выбранных местах
+    AI-->>O: «почему» и «что делать»
+    Note over O: guard: ID из списка, без выдуманных цифр
+    O-->>B: объяснения + «Как я выбирал»
 ```
 
 **Оценка места:** `0,35·подходит под запрос + 0,25·близость + 0,15·уверенность в часах + 0,15·погода + 0,10·популярность`, затем разнообразие — не три кофейни подряд.
@@ -114,38 +109,7 @@ sequenceDiagram
 
 15 онлайн-сервисов и 9 фоновых воркеров в одном кластере DigitalOcean Kubernetes. Один Docker-образ на все роли, роль задаёт переменная `SERVICE`. Тот же код запускается и одним процессом (`make dev`) — для разработки и демо без кластера.
 
-```mermaid
-flowchart TB
-    U([Браузер · телефон]) -->|HTTPS · только клетка ~150 м| ORC[orchestrator<br/>поток SSE]
-
-    subgraph understand [Понять запрос]
-        direction LR
-        NLU[nlu] ~~~ CTX[context<br/>время · закат · погода] ~~~ SES[session]
-    end
-    subgraph find [Найти, оценить, проложить]
-        direction LR
-        RET[retrieval] ~~~ RNK[ranking] ~~~ RTE[routing] ~~~ CAT[catalog-api] ~~~ EVT[events-api]
-    end
-    subgraph explain [Объяснить и проверить]
-        direction LR
-        EXP[explain] ~~~ GRD[guard]
-    end
-
-    ORC --> understand
-    ORC --> find
-    ORC --> explain
-    find --> PL[places-live · шлюз 2GIS] --> DG[(2GIS API)]
-    understand --> LLM[llm-gateway]
-    explain --> LLM
-    LLM --> OAI[(OpenAI)]
-    find --> DB[(PostgreSQL + PostGIS · OpenSearch · Redis · OSRM)]
-
-    subgraph pipeline [Сбор данных через Kafka]
-        direction LR
-        CJ[6 сборщиков · CronJob] --> NRM[normalizer] --> DD[dedup] --> EMB[embedder] --> IDX[indexer]
-    end
-    pipeline --> DB
-```
+<img src="docs/img/architecture.svg" alt="Архитектура Seruen: браузер → orchestrator → сервисы «понять», «найти», «объяснить» → 2GIS и OpenAI → хранилища ← конвейер сбора данных через Kafka">
 
 | Слой | Что |
 |---|---|

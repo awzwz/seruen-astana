@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 712" width="1000" height="712" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#6B7280"/>
+    </marker>
+    <style>
+      .t { font-size: 15px; fill: #1F1F1F; }
+      .tw { font-size: 15px; fill: #FFFFFF; font-weight: 600; }
+      .s { font-size: 12.5px; fill: #6B7280; }
+      .sw { font-size: 12.5px; fill: rgba(255,255,255,.85); }
+      .h { font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+      .chip { fill: #FFFFFF; stroke: rgba(60,60,67,.18); }
+      .ln { stroke: #6B7280; stroke-width: 1.6; fill: none; }
+    </style>
+  </defs>
+  <rect width="1000" height="712" rx="18" fill="#FFFFFF"/>
+
+  <!-- row 1: browser → ingress → orchestrator -->
+  <rect x="30" y="24" width="250" height="62" rx="14" fill="#0073FA"/>
+  <text x="50" y="50" class="tw">Браузер · телефон</text>
+  <text x="50" y="71" class="sw">точная точка → клетка ~150 м</text>
+  <path d="M282 55H326" class="ln" marker-end="url(#a)"/>
+  <rect x="330" y="24" width="190" height="62" rx="14" fill="#F2F2F7"/>
+  <text x="348" y="50" class="t" font-weight="600">ingress-nginx</text>
+  <text x="348" y="71" class="s">HTTPS · cert-manager</text>
+  <path d="M522 55H566" class="ln" marker-end="url(#a)"/>
+  <rect x="570" y="24" width="260" height="62" rx="14" fill="#19AA1E"/>
+  <text x="590" y="50" class="tw">orchestrator</text>
+  <text x="590" y="71" class="sw">один запрос → поток SSE</text>
+  <text x="850" y="50" class="s">15 сервисов · FastAPI</text>
+  <text x="850" y="69" class="s">Linkerd mTLS</text>
+
+  <!-- fan-out -->
+  <path d="M700 88V108H165V128M510 108V128M845 108V128" class="ln"/>
+  <path d="M165 112V128" class="ln" marker-end="url(#a)"/>
+  <path d="M510 112V128" class="ln" marker-end="url(#a)"/>
+  <path d="M845 112V128" class="ln" marker-end="url(#a)"/>
+
+  <!-- row 2: three groups -->
+  <rect x="30" y="132" width="270" height="168" rx="16" fill="#F4ECFF"/>
+  <text x="48" y="158" class="h" fill="#8E3FC8">Понять запрос</text>
+  <rect x="46" y="172" width="238" height="34" rx="10" class="chip"/><text x="60" y="194" class="t">nlu · текст → условия</text>
+  <rect x="46" y="214" width="238" height="34" rx="10" class="chip"/><text x="60" y="236" class="t">context · погода, закат</text>
+  <rect x="46" y="256" width="238" height="34" rx="10" class="chip"/><text x="60" y="278" class="t">session · 30 минут</text>
+
+  <rect x="320" y="132" width="380" height="168" rx="16" fill="#E6F1FF"/>
+  <text x="338" y="158" class="h" fill="#0060D0">Найти · оценить · проложить</text>
+  <rect x="336" y="172" width="170" height="34" rx="10" class="chip"/><text x="350" y="194" class="t">retrieval</text><text x="420" y="194" class="s">поиск</text>
+  <rect x="336" y="214" width="170" height="34" rx="10" class="chip"/><text x="350" y="236" class="t">ranking</text><text x="412" y="236" class="s">оценка</text>
+  <rect x="336" y="256" width="170" height="34" rx="10" class="chip"/><text x="350" y="278" class="t">routing</text><text x="410" y="278" class="s">маршрут</text>
+  <rect x="514" y="172" width="170" height="34" rx="10" class="chip"/><text x="528" y="194" class="t">catalog-api</text>
+  <rect x="514" y="214" width="170" height="34" rx="10" class="chip"/><text x="528" y="236" class="t">events-api</text><text x="610" y="236" class="s">афиша</text>
+  <rect x="514" y="256" width="170" height="34" rx="10" class="chip"/><text x="528" y="278" class="t">feedback-api</text>
+
+  <rect x="720" y="132" width="250" height="168" rx="16" fill="#FFF3E0"/>
+  <text x="738" y="158" class="h" fill="#B25E00">Объяснить и проверить</text>
+  <rect x="736" y="172" width="218" height="34" rx="10" class="chip"/><text x="750" y="194" class="t">explain · ИИ по ID</text>
+  <rect x="736" y="214" width="218" height="34" rx="10" class="chip"/><text x="750" y="236" class="t">guard · проверка</text>
+  <text x="738" y="272" class="s">не прошло проверку —</text>
+  <text x="738" y="289" class="s">текст из фактов по шаблону</text>
+
+  <!-- row 3: gateways and external APIs -->
+  <path d="M590 302V330" class="ln" marker-end="url(#a)"/>
+  <rect x="470" y="334" width="210" height="56" rx="14" fill="#F2F2F7"/>
+  <text x="488" y="358" class="t" font-weight="600">places-live</text>
+  <text x="488" y="378" class="s">шлюз 2GIS · пул ключей</text>
+  <path d="M682 362H702" class="ln" marker-end="url(#a)"/>
+  <rect x="706" y="334" width="90" height="56" rx="14" fill="#19AA1E"/>
+  <text x="724" y="358" class="tw">2GIS</text>
+  <text x="724" y="378" class="sw">API</text>
+
+  <path d="M884 302V330" class="ln" marker-end="url(#a)"/>
+  <rect x="808" y="334" width="162" height="56" rx="14" fill="#F2F2F7"/>
+  <text x="824" y="358" class="t" font-weight="600">llm-gateway</text>
+  <text x="824" y="378" class="s">бюджет · кэш</text>
+  <rect x="808" y="398" width="162" height="30" rx="10" fill="#1F1F1F"/>
+  <text x="824" y="418" class="tw" font-size="13.5">OpenAI</text>
+  <text x="884" y="418" class="sw" font-size="11.5">текст · голос</text>
+  <path d="M889 390V396" class="ln"/>
+
+  <text x="472" y="410" class="s">живые часы, рейтинг, адреса,</text>
+  <text x="472" y="427" class="s">пешие пути, транспорт, такси</text>
+
+  <!-- row 4: stores -->
+  <path d="M165 302V444" class="ln" marker-end="url(#a)"/>
+  <path d="M410 302V444" class="ln" marker-end="url(#a)"/>
+  <rect x="30" y="448" width="940" height="92" rx="16" fill="#F2F2F7"/>
+  <text x="48" y="474" class="h" fill="#3C3C43">Хранилища</text>
+  <rect x="46" y="488" width="196" height="36" rx="10" class="chip"/><text x="60" y="511" class="t">PostgreSQL + PostGIS</text>
+  <rect x="252" y="488" width="208" height="36" rx="10" class="chip"/><text x="266" y="511" class="t">OpenSearch</text><text x="355" y="511" class="s">BM25 + k-NN</text>
+  <rect x="470" y="488" width="78" height="36" rx="10" class="chip"/><text x="486" y="511" class="t">Redis</text>
+  <rect x="558" y="488" width="114" height="36" rx="10" class="chip"/><text x="574" y="511" class="t">ClickHouse</text>
+  <rect x="682" y="488" width="80" height="36" rx="10" class="chip"/><text x="698" y="511" class="t">MinIO</text>
+  <rect x="772" y="488" width="182" height="36" rx="10" class="chip"/><text x="788" y="511" class="t">OSRM</text><text x="840" y="511" class="s">граф Астаны</text>
+
+  <!-- row 5: ingest pipeline -->
+  <path d="M500 566V544" class="ln" marker-end="url(#a)"/>
+  <rect x="30" y="570" width="940" height="92" rx="16" fill="#FFF8E1"/>
+  <text x="48" y="596" class="h" fill="#8A6A00">Сбор данных · раз в сутки, афиша — каждые 3 часа</text>
+  <rect x="46" y="610" width="176" height="36" rx="10" class="chip"/><text x="60" y="633" class="t">6 сборщиков</text><text x="160" y="633" class="s">CronJob</text>
+  <path d="M224 628H244" class="ln" marker-end="url(#a)"/>
+  <rect x="248" y="610" width="72" height="36" rx="10" fill="#1F1F1F"/><text x="262" y="633" class="tw" font-size="14">Kafka</text>
+  <path d="M322 628H342" class="ln" marker-end="url(#a)"/>
+  <rect x="346" y="610" width="106" height="36" rx="10" class="chip"/><text x="360" y="633" class="t">normalizer</text>
+  <path d="M454 628H474" class="ln" marker-end="url(#a)"/>
+  <rect x="478" y="610" width="76" height="36" rx="10" class="chip"/><text x="492" y="633" class="t">dedup</text>
+  <path d="M556 628H576" class="ln" marker-end="url(#a)"/>
+  <rect x="580" y="610" width="84" height="36" rx="10" class="chip"/><text x="594" y="633" class="t">quality</text>
+  <path d="M666 628H686" class="ln" marker-end="url(#a)"/>
+  <rect x="690" y="610" width="104" height="36" rx="10" class="chip"/><text x="704" y="633" class="t">embedder</text>
+  <path d="M796 628H816" class="ln" marker-end="url(#a)"/>
+  <rect x="820" y="610" width="134" height="36" rx="10" class="chip"/><text x="834" y="633" class="t">indexer</text><text x="892" y="633" class="s">→ поиск</text>
+
+  <!-- platform -->
+  <text x="500" y="692" class="s" text-anchor="middle">Платформа: Kubernetes (DigitalOcean) · Linkerd · KEDA · HPA · Argo CD · Prometheus + Grafana · Loki · Tempo · Vault</text>
+</svg>
