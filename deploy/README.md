@@ -29,8 +29,7 @@ Hostnames use sslip.io, TLS certificates from Let's Encrypt (cert-manager, HTTP-
 | Seruen app (after app deploy) | https://seruen.129-212-254-180.sslip.io (`/partner` → partner-portal) | – |
 | Grafana | https://grafana.129-212-254-180.sslip.io | `admin` / `secrets/grafana.env` (k8s secret `observability/grafana-admin`) |
 | Argo CD | https://argocd.129-212-254-180.sslip.io | `admin` / `secrets/argocd.env` (k8s secret `argocd/argocd-initial-admin-secret`) |
-| Langfuse (optional) | https://langfuse.129-212-254-180.sslip.io | `admin@seruen.local` / `secrets/langfuse.env` (INIT_USER_PASSWORD); project keys PUBLIC_KEY / SECRET_KEY there |
-| Unleash (optional) | https://unleash.129-212-254-180.sslip.io | `admin` / `secrets/unleash.env` (ADMIN_PASSWORD) |
+| Langfuse / Unleash | skipped (see below) | – |
 
 Data stores are **never** exposed outside the cluster (ClusterIP only). For a local look use port-forward, e.g.
 `kubectl -n data port-forward svc/opensearch 9200`, `kubectl -n data port-forward svc/minio 9001` (MinIO console),
@@ -60,8 +59,12 @@ Data stores are **never** exposed outside the cluster (ClusterIP only). For a lo
 | 11 | KEDA | platform | 2.21.0 | – |
 | 12 | Argo CD (no Dex / notifications, ApplicationSet scaled to 0) + Application `seruen-apps` (manual sync) | argocd | chart 10.10.5 / v3.5.5 | – |
 | 13 | Vault **DEV MODE** (in-memory, auto-unsealed, lost on restart) | platform | chart 0.34.1 / Vault 2.0.4 | `vault.platform:8200` |
-| 14 | Langfuse (web + worker on our PG/ClickHouse/Redis db 3/MinIO) | platform | chart 2.1.6 / Langfuse 4.63.0 | `langfuse-web.platform:3000` |
-| 14 | Unleash (on our PG) | platform | chart 5.6.9 / Unleash 7.5.0 | `unleash.platform:4242` |
+| 14 | ~~Langfuse~~ **skipped**: installed, but the 4.63 web pod dies with a Node heap OOM (~500 MB) within the ≤1 GiB budget, so it was uninstalled cleanly (release, secrets, cert, its PG/ClickHouse databases, Redis db 3). | – | chart 2.1.6 | – |
+| 14 | ~~Unleash~~ **skipped** (not installed at wrap-up). Values ready in `platform/unleash/`. | – | chart 5.6.9 | – |
+
+Both stay available via the explicit step `deploy/scripts/bootstrap.sh optional` (not part of the default run).
+`platform/langfuse/values.yaml` already has the next attempt (heap 1024 MB, limit 1.5Gi), but it is untested.
+The PG login roles `langfuse`/`unleash` remain declared in `platform/cnpg/catalog.yaml` (harmless, no databases).
 
 Grafana datasources: Prometheus (`uid prometheus`), Loki (`uid loki`), Tempo (`uid tempo`, trace↔logs, service map).
 Extra scrape targets: Kafka exporter (consumer lag), MinIO, ingress-nginx, Linkerd proxies in `seruen`
@@ -82,7 +85,20 @@ Extra scrape targets: Kafka exporter (consumer lag), MinIO, ingress-nginx, Linke
 
 Measured after the full platform install (`kubectl get pods -A`, requests incl. native sidecars):
 
-MEMORY_TABLE_PLACEHOLDER
+| namespace | requests | main consumers |
+|---|---|---|
+| data | 6016 Mi | OpenSearch 2Gi, Kafka 1.5Gi, ClickHouse 1Gi, Postgres 512Mi, OSRM 256Mi, MinIO 256Mi, Redis 128Mi, Strimzi entity operator + exporter |
+| observability | 2528 Mi | Prometheus 1Gi, Loki 384Mi, Grafana 256Mi, Tempo 256Mi, Alloy 4×64Mi, node-exporter, KSM, operator, Alertmanager |
+| kube-system | 2052 Mi | DOKS itself (Cilium, CoreDNS, CSI, agents) + metrics-server |
+| argocd | 640 Mi | controller 256, repo-server 192, server 128, redis 64 |
+| platform | 608 Mi | Strimzi operator 256, CNPG 96, KEDA 160, Vault dev 96 |
+| linkerd | 220 Mi | destination, identity, proxy-injector (+ their proxies) |
+| cert-manager / ingress-nginx | 160 / 128 Mi | |
+| **platform total** | **12 352 Mi ≈ 12.1 GiB** of 25.1 GiB allocatable (48 %) | |
+| seruen (apps, deployed by the app team at wrap-up) | 3 552 Mi | → cluster total 15.5 GiB (62 %), 9.5 GiB free |
+
+`kubectl top nodes` at wrap-up: 84 % / 52 % / 65 % / 58 % actual memory use. OpenSearch (≈1.6 GiB used) sits on
+`main-3b78oj`, which is the fullest node.
 
 Budget for the apps (`deploy/apps`): 16 online pods (orchestrator and retrieval × 2) + 8 workers at 128Mi + 20Mi Linkerd proxy ≈ **3.5 GiB**;
 autoscaling to max (HPA 2→4 ×2, KEDA 1→3 ×2) adds ≈ 1.2 GiB; a collector CronJob run adds ≈ 0.3 GiB while it runs.
@@ -98,8 +114,8 @@ Nothing secret is committed. Generated values live in `deploy/secrets/` (gitigno
 | `clickhouse.env` | `data/clickhouse-auth`, copied to `seruen/seruen-secrets` | ClickHouse user `seruen` |
 | `minio.env` | `data/minio-auth`, copied to `seruen/seruen-secrets`, `platform/langfuse` | MinIO root |
 | – (CNPG-generated) | `data/catalog-app`, copied to `seruen/seruen-db` | PG owner `seruen` of db `seruen` |
-| `langfuse.env` | `data/pg-langfuse`, `platform/langfuse` | Langfuse salt/keys/admin/PG role |
-| `unleash.env` | `data/pg-unleash`, `platform/unleash` | Unleash admin / PG role |
+| `langfuse.env` | `data/pg-langfuse` | Langfuse (skipped): salt/keys/admin/PG role password |
+| `unleash.env` | `data/pg-unleash` | Unleash (skipped): admin / PG role password |
 | `vault.env`, `vault-values.yaml` | (helm values) | Vault dev root token |
 | `linkerd/` | `linkerd/linkerd-identity-issuer` | trust anchor + issuer cert/key |
 | `lb-ip.txt`, `cluster-id` | – | LB IP, cluster id (for teardown) |
@@ -118,7 +134,7 @@ deploy/scripts/bootstrap.sh observability argocd           # just some steps
 FORCE_OSRM=1    deploy/scripts/bootstrap.sh osrm           # rebuild the OSRM graph from fresh Geofabrik data
 FORCE_LINKERD=1 deploy/scripts/bootstrap.sh linkerd        # upgrade Linkerd (re-generates its webhook certs)
 ```
-Steps: `namespaces registry ingress metrics_server cert_manager kafka postgres opensearch stores osrm observability linkerd keda argocd vault optional`.
+Steps: `namespaces registry ingress metrics_server cert_manager kafka postgres opensearch stores osrm observability linkerd keda argocd vault` (+ `optional`, explicit only).
 Passwords are generated only once; deleting a file in `deploy/secrets/` makes the next run generate a new value
 (not possible for the CNPG/Langfuse DB passwords without also updating the database role, which CNPG does on its own).
 
