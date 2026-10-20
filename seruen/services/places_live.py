@@ -18,6 +18,7 @@ import httpx
 from seruen.common.clients import endpoint
 from seruen.common.models import CATEGORIES, POI, Attr, Description, Hours, Names, Popularity, SourceRef
 from seruen.common.stores import kv
+from seruen.services import dgis_keys as K
 
 API = "https://catalog.api.2gis.com/3.0/items"
 FIELDS = "items.point,items.schedule,items.rubrics,items.reviews,items.attribute_groups,items.address,items.full_address_name"
@@ -155,31 +156,22 @@ def queries_for(wants: list[str], kids: bool, night: bool, mode: str) -> list[st
     return q[:3]
 
 
-def _budget_ok() -> tuple[bool, int]:
-    limit = int(os.environ.get("DGIS_DAILY_LIMIT", "600"))
-    used = int(kv(1).get(f"dgis:{date.today().isoformat()}") or 0)
-    return used < limit, limit - used
-
-
 @endpoint("places-live", "/v1/nearby")
 async def nearby(p: dict) -> dict:
-    key = os.environ.get("DGIS_API_KEY")
-    if not key:
+    if not K.keys():
         return {"pois": [], "stats": {"enabled": False, "reason": "no_key"}}
-    ok, left = _budget_ok()
-    if not ok:
-        return {"pois": [], "stats": {"enabled": True, "reason": "daily_budget_exhausted"}}
-    qs = queries_for(p.get("wants", []), bool(p.get("kids")), bool(p.get("night")), p.get("mode", "walk"))[: max(1, min(3, left))]
+    if not K.order("places"):
+        return {"pois": [], "stats": {"enabled": True, "reason": "all_keys_exhausted"}}
+    qs = queries_for(p.get("wants", []), bool(p.get("kids")), bool(p.get("night")), p.get("mode", "walk"))[:3]
     lat, lon = p["lat"], p["lon"]
     radius = int(min(3000, max(300, p.get("radius_m", 1000))))
     t = time.perf_counter()
 
     async def one(c: httpx.AsyncClient, q: str):
-        r = await c.get(API, params={"q": q, "point": f"{lon:.6f},{lat:.6f}", "radius": radius, "type": "branch,attraction",
-                                     "fields": FIELDS, "page_size": 10, "locale": "ru_KZ", "key": key})
-        kv(1).incrby(f"dgis:{date.today().isoformat()}", 1, ex=2 * 86400)
-        d = r.json()
-        if d.get("meta", {}).get("code") != 200:
+        st, d = await K.request("places", "GET", API, client=c, params={
+            "q": q, "point": f"{lon:.6f},{lat:.6f}", "radius": radius, "type": "branch,attraction",
+            "fields": FIELDS, "page_size": 10, "locale": "ru_KZ"})
+        if not d or d.get("meta", {}).get("code") != 200:
             return q, []
         return q, (d.get("result") or {}).get("items") or []
 
@@ -213,15 +205,6 @@ SUBTYPE_RU = {"bus": "автобус", "trolleybus": "троллейбус", "tr
               "light_metro": "LRT", "metro": "метро", "light_rail": "LRT", "suburban_train": "электричка"}
 
 
-def _quota(service: str, limit_env: str, default: int) -> bool:
-    limit = int(os.environ.get(limit_env, str(default)))
-    key = f"dgis:{service}:{date.today().isoformat()}"
-    if int(kv(1).get(key) or 0) >= limit:
-        return False
-    kv(1).incrby(key, 1, ex=2 * 86400)
-    return True
-
-
 def _wkt(sel: str) -> list[list[float]]:
     """'LINESTRING(71.4 51.1, 71.5 51.2)' → [[71.4, 51.1], [71.5, 51.2]] (extra z values ignored)."""
     try:
@@ -243,7 +226,6 @@ def directions_link(a: tuple[float, float], b: tuple[float, float]) -> str:
 @endpoint("places-live", "/v1/where")
 async def where(p: dict) -> dict:
     """Reverse geocoding of the privacy-cell centre. Caching geocoding results is explicitly allowed by 2GIS (п. 4.2)."""
-    key = os.environ.get("DGIS_API_KEY")
     cell = p.get("cell") or f"{p['lat']:.4f},{p['lon']:.4f}"
     ck = f"dgis:where:{cell}"
     hit = kv(1).get(ck)
@@ -251,15 +233,11 @@ async def where(p: dict) -> dict:
         import orjson
 
         return {**orjson.loads(hit), "cached": True}
-    if not key or not _quota("geo", "DGIS_GEO_DAILY_LIMIT", 800):
+    st, d = await K.request("geocoder", "GET", GEOCODE, timeout=3.0, params={
+        "lat": p["lat"], "lon": p["lon"], "fields": "items.point,items.adm_div,items.full_name", "locale": "ru_KZ"})
+    if not d or (d.get("meta") or {}).get("code") != 200:
         return {"address": None}
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as c:
-            r = await c.get(GEOCODE, params={"lat": p["lat"], "lon": p["lon"], "fields": "items.point,items.adm_div,items.full_name",
-                                             "locale": "ru_KZ", "key": key})
-        it = ((r.json().get("result") or {}).get("items") or [{}])[0]
-    except Exception:
-        return {"address": None}
+    it = ((d.get("result") or {}).get("items") or [{}])[0]
     district = next((a.get("name") for a in it.get("adm_div") or [] if a.get("type") == "district"), None)
     building = (it.get("building_name") or "").split(",")[0] or None
     out = {"address": it.get("address_name") or it.get("name"), "building": building, "district": district, "src": "2GIS"}
@@ -271,17 +249,13 @@ async def where(p: dict) -> dict:
 
 @endpoint("places-live", "/v1/suggest")
 async def suggest(p: dict) -> dict:
-    key = os.environ.get("DGIS_API_KEY")
     q = (p.get("q") or "").strip()[:80]
-    if not key or len(q) < 2 or not _quota("suggest", "DGIS_SUGGEST_DAILY_LIMIT", 800):
+    if len(q) < 2:
         return {"items": []}
-    params = {"q": q, "fields": "items.point,items.full_name", "locale": "ru_KZ", "key": key, "page_size": 7,
+    params = {"q": q, "fields": "items.point,items.full_name", "locale": "ru_KZ", "page_size": 7,
               "location": f"{p.get('lon', 71.43):.4f},{p.get('lat', 51.13):.4f}"}
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as c:
-            items = ((await c.get(SUGGEST, params=params)).json().get("result") or {}).get("items") or []
-    except Exception:
-        return {"items": []}
+    st, d = await K.request("suggest", "GET", SUGGEST, params=params, timeout=3.0)
+    items = ((d or {}).get("result") or {}).get("items") or []
     out = []
     for it in items:
         pt = it.get("point")
@@ -295,18 +269,15 @@ async def suggest(p: dict) -> dict:
 @endpoint("places-live", "/v1/walk")
 async def walk(p: dict) -> dict:
     """Walking legs between consecutive points [[lat, lon], ...] — one 2GIS request per leg, in parallel."""
-    key = os.environ.get("DGIS_API_KEY")
     pts = p.get("points") or []
-    if not key or len(pts) < 2:
+    if len(pts) < 2:
         return {"legs": None}
 
     async def leg(c, a, b):
-        if not _quota("route", "DGIS_ROUTE_DAILY_LIMIT", 800):
-            return None
-        r = await c.post(ROUTING, params={"key": key}, json={
+        st, body = await K.request("routing", "POST", ROUTING, client=c, json={
             "points": [{"lat": a[0], "lon": a[1], "type": "walking", "start": True}, {"lat": b[0], "lon": b[1], "type": "walking"}],
             "transport": "walking", "output": "detailed", "locale": "ru"})
-        res = (r.json().get("result") or [None])[0]
+        res = ((body or {}).get("result") or [None])[0]
         if not res:
             return None
         geom: list[list[float]] = []
@@ -335,18 +306,11 @@ async def walk(p: dict) -> dict:
 @endpoint("places-live", "/v1/transit")
 async def transit(p: dict) -> dict:
     """Best public-transport option (bus, LRT …) between two points, with lines, transfers and geometry."""
-    key = os.environ.get("DGIS_API_KEY")
     a, b = p["from"], p["to"]
-    if not key or not _quota("transit", "DGIS_TRANSIT_DAILY_LIMIT", 500):
-        return {"option": None}
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as c:
-            r = await c.post(TRANSIT, params={"key": key}, json={
-                "source": {"point": {"lat": a[0], "lon": a[1]}}, "target": {"point": {"lat": b[0], "lon": b[1]}},
-                "transport": ["bus", "trolleybus", "tram", "shuttle_bus", "light_metro", "metro", "light_rail"], "locale": "ru"})
-        variants = r.json() if isinstance(r.json(), list) else []
-    except Exception:
-        return {"option": None}
+    st, body = await K.request("transit", "POST", TRANSIT, timeout=5.0, json={
+        "source": {"point": {"lat": a[0], "lon": a[1]}}, "target": {"point": {"lat": b[0], "lon": b[1]}},
+        "transport": ["bus", "trolleybus", "tram", "shuttle_bus", "light_metro", "metro", "light_rail"], "locale": "ru"})
+    variants = body if isinstance(body, list) else []
     variants = [v for v in variants if not v.get("pedestrian")]
     if not variants:
         return {"option": None}
@@ -381,20 +345,18 @@ async def transit(p: dict) -> dict:
 @endpoint("places-live", "/v1/taxi")
 async def taxi(p: dict) -> dict:
     """Car time with current traffic (2GIS 'taxi' routing) + a link that opens the route in 2GIS."""
-    key = os.environ.get("DGIS_API_KEY")
     a, b = p["from"], p["to"]
-    if not key or not _quota("taxi", "DGIS_TAXI_DAILY_LIMIT", 500):
-        return {"option": None}
-    try:
-        async with httpx.AsyncClient(timeout=4.0) as c:
-            r = await c.post(ROUTING, params={"key": key}, json={
-                "points": [{"lat": a[0], "lon": a[1], "type": "stop", "start": True}, {"lat": b[0], "lon": b[1], "type": "stop"}],
-                "transport": "taxi", "route_mode": "fastest", "traffic_mode": "jam", "output": "summary", "locale": "ru"})
-        res = (r.json().get("result") or [None])[0]
-    except Exception:
-        return {"option": None}
+    st, body = await K.request("routing", "POST", ROUTING, timeout=4.0, json={
+        "points": [{"lat": a[0], "lon": a[1], "type": "stop", "start": True}, {"lat": b[0], "lon": b[1], "type": "stop"}],
+        "transport": "taxi", "route_mode": "fastest", "traffic_mode": "jam", "output": "summary", "locale": "ru"})
+    res = ((body or {}).get("result") or [None])[0] if isinstance(body, dict) else None
     if not res or not res.get("duration"):
         return {"option": None}
     return {"option": {"minutes": max(1, round(res["duration"] / 60)) + 5, "drive_min": max(1, round(res["duration"] / 60)),
                        "km": round(res.get("length", 0) / 1000, 1), "traffic": True, "link": directions_link(tuple(a), tuple(b))},
             "src": "2GIS"}
+
+
+@endpoint("places-live", "/v1/keys")
+async def keys_status(p: dict) -> dict:
+    return K.status()

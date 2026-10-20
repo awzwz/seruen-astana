@@ -43,7 +43,9 @@ KEY=$(dotenv_get "$ENV_FILE" OPENAI_API_KEY || true)
   printf 'OPENAI_API_KEY=%s\n' "$KEY"
   DG=$(dotenv_get "$ENV_FILE" DGIS_API_KEY || true)
   [[ -n "$DG" ]] && printf 'DGIS_API_KEY=%s\n' "$DG"
-  unset DG
+  DGS=$(dotenv_get "$ENV_FILE" DGIS_API_KEYS || true)
+  [[ -n "$DGS" ]] && printf 'DGIS_API_KEYS=%s\n' "$DGS"
+  unset DG DGS
   if [[ -f "$SECRETS_DIR/clickhouse.env" ]]; then
     printf 'CLICKHOUSE_USER=%s\n' "$(env_get "$SECRETS_DIR/clickhouse.env" CLICKHOUSE_USER)"
     printf 'CLICKHOUSE_PASSWORD=%s\n' "$(env_get "$SECRETS_DIR/clickhouse.env" CLICKHOUSE_PASSWORD)"

@@ -384,6 +384,14 @@ def extra(app: FastAPI) -> None:
         except ServiceError:
             return {"items": []}
 
+    @app.get("/api/status/2gis")
+    async def api_dgis_status():
+        """Masked usage of the 2GIS key pool (per key and service, blocks and reset times)."""
+        try:
+            return await call("places-live", "/v1/keys", {}, timeout=3)
+        except ServiceError:
+            return {"keys": []}
+
     @app.get("/api/landmarks")
     async def get_landmarks():
         return _landmarks()
