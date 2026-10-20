@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+data/
+!data/.gitkeep
+*.log
+.DS_Store
+kubeconfig*
+deploy/secrets/
+.pytest_cache/
+node_modules/
