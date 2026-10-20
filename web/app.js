@@ -422,7 +422,8 @@
     const el = $(sel);
     if (!entry) { el.textContent = ''; el.className = 'form-msg' + (sel === '#delete-msg' ? ' ok' : ''); return; }
     el.className = 'form-msg ' + (entry.tone || '');
-    el.innerHTML = icon(entry.tone === 'ok' ? 'check' : entry.tone === 'warn' ? 'alert' : 'info') + '<span>' + esc(t(entry.key)) + '</span>';
+    el.innerHTML = icon(entry.tone === 'ok' ? 'check' : entry.tone === 'warn' ? 'alert' : 'info') + '<span>' + esc(t(entry.key)) +
+      (entry.help && entry.help.length ? '<ol class="geo-help">' + entry.help.map((h) => '<li>' + esc(h) + '</li>').join('') + '</ol>' : '') + '</span>';
   }
 
   /* ------------------------------------------------------------ about dialog */
@@ -548,7 +549,12 @@
     renderMsgs();
     btn.setAttribute('aria-busy', 'true');
     btn.classList.add('is-loading');
-    navigator.geolocation.getCurrentPosition((pos) => {
+    // remember the permission state before asking: "denied" here = the site is blocked in the browser;
+    // a refusal while the state is "prompt"/"granted" = location is switched off for the browser in the OS
+    let permBefore = 'unknown';
+    let retried = false;
+    const ask = (opts) => navigator.geolocation.getCurrentPosition(onPos, onErr, opts);
+    const onPos = (pos) => {
       btn.removeAttribute('aria-busy');
       btn.classList.remove('is-loading');
       const c = pos.coords;
@@ -557,12 +563,53 @@
         state.originMsgKey = {key: 'geo_outside', tone: 'warn'};
         renderMsgs();
       }
-    }, (err) => {
+    };
+    const onErr = (err) => {
+      const code = err && err.code;
+      if ((code === 2 || code === 3) && !retried) {   // no fix / too slow: retry once with the fast Wi-Fi based position
+        retried = true;
+        ask({enableHighAccuracy: false, timeout: 10000, maximumAge: 300000});
+        return;
+      }
       btn.removeAttribute('aria-busy');
       btn.classList.remove('is-loading');
-      state.originMsgKey = {key: err && err.code === 1 ? 'geo_denied' : 'geo_failed', tone: 'warn'};
+      if (code === 1) {
+        const where = permBefore === 'denied' ? 'site' : 'os';
+        state.originMsgKey = {key: where === 'site' ? 'geo_blocked_site' : 'geo_blocked_os', tone: 'warn', help: geoHelp(where)};
+      } else {
+        state.originMsgKey = {key: code === 3 ? 'geo_timeout' : 'geo_unavailable', tone: 'warn', help: [t('help_type_instead')]};
+      }
       renderMsgs();
-    }, {enableHighAccuracy: true, timeout: 12000, maximumAge: 30000});
+    };
+    (async () => {
+      try {
+        if (navigator.permissions && navigator.permissions.query) permBefore = (await navigator.permissions.query({name: 'geolocation'})).state;
+      } catch (e) { /* Safari < 16 has no permissions API for geolocation */ }
+      ask({enableHighAccuracy: true, timeout: 12000, maximumAge: 30000});
+    })();
+  }
+
+  // step-by-step help for the browser / OS the person actually uses
+  function geoHelp(where) {
+    const ua = navigator.userAgent || '';
+    const ios = /iPhone|iPad|iPod/.test(ua);
+    const android = /Android/.test(ua);
+    const safari = /^((?!chrome|crios|android|edg).)*safari/i.test(ua);
+    const firefox = /Firefox|FxiOS/.test(ua);
+    const mac = /Macintosh|Mac OS X/.test(ua) && !ios;
+    const win = /Windows/.test(ua);
+    const browser = safari ? 'Safari' : firefox ? 'Firefox' : /Edg\//.test(ua) ? 'Edge' : 'Chrome';
+    const steps = [];
+    if (ios) steps.push(t('help_ios'));
+    else if (android) steps.push(t('help_android'));
+    else if (where === 'site') steps.push(t(safari ? 'help_safari_site' : 'help_chrome_site', {browser: browser}));
+    else {
+      if (mac) steps.push(t('help_mac_os', {browser: browser}));
+      else if (win) steps.push(t('help_win_os'));
+      steps.push(t(safari ? 'help_safari_site' : 'help_chrome_site', {browser: browser}));
+    }
+    steps.push(t('help_type_instead'));
+    return steps;
   }
 
   async function loadLandmarks() {

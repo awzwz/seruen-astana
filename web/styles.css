@@ -880,3 +880,5 @@ input[type="range"] { width: 100%; min-height: 40px; accent-color: var(--sky-600
 .card-moves { margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--line, #d9e1e7); border-radius: 10px; }
 .moves-title { margin: 0; font-weight: 600; font-size: 13px; }
 .dest-block { display: grid; gap: 2px; }
+
+.geo-help { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12.5px; line-height: 1.45; }
