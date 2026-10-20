@@ -10,7 +10,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/awzwz/seruen
+    repoURL: https://github.com/awzwz/seruen-astana
     targetRevision: main
     path: deploy/apps
   destination:

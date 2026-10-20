@@ -31,6 +31,7 @@ Entrypoint `python -m seruen.run`, role chosen by the env var `SERVICE` (service
 | `events-api` | `GET /v1/events?lat=&lon=&radius_m=&from=&to=` |
 | `feedback-api` | `POST /v1/feedback {poi_id, kind, cell}` → Kafka `feedback` |
 | `partner-portal` | `GET /partner`, `POST /v1/partner/hours` (pending moderation, labelled) |
+| `places-live` | 2GIS gateway, nothing stored except the geocoding cache: `POST /v1/nearby` (live places for the walk), `POST /v1/search {q, lat, lon}` (any kind of place, radius 1.5 → 4 → 10 km), `/v1/where` (address of the cell), `/v1/suggest` («Откуда?»), `/v1/walk`, `/v1/transit`, `/v1/taxi`, `/v1/keys` (masked key-pool status) |
 
 ## Workers and jobs (namespace `seruen`)
 

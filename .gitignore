@@ -13,3 +13,11 @@ deploy/secrets/
 .pytest_cache/
 node_modules/
 design/shots/
+
+# local only: these files embed real 2GIS answers, and the 2GIS terms forbid storing or publishing them
+design/mockup-*.html
+design/compare.html
+design/sample-data*.json
+design/src/f-data.json
+docs/TEST_SCENARIOS*.json
+.backup/

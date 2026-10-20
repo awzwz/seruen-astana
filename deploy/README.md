@@ -157,7 +157,7 @@ deploy/scripts/sync-secrets.sh
 deploy/scripts/render-hosts.sh            # commit deploy/apps/patches/* afterwards
 # 3. deploy: either directly ...
 kubectl apply -k deploy/apps
-# ... or via Argo CD after pushing deploy/ to github.com/awzwz/seruen (branch main):
+# ... or via Argo CD after pushing deploy/ to github.com/awzwz/seruen-astana (branch main):
 #    UI -> seruen-apps -> Sync, or: kubectl -n argocd patch application seruen-apps --type merge \
 #      -p '{"operation":{"sync":{"revision":"main"}}}'
 # 4. schema + initial data (runs ensure_all + loads data/catalog baked into the image)

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Registers the private GitHub repo awzwz/seruen in Argo CD and applies the Application seruen-apps.
+# Registers the GitHub repo awzwz/seruen-astana in Argo CD (a token is only needed for a private repo) and applies the Application seruen-apps.
 # The GitHub token comes from `gh auth token` and is piped straight into kubectl (never printed).
 # Does nothing (exit 0) when the repo does not exist yet.
 set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=lib.sh
 source "$SCRIPT_DIR/lib.sh"
-REPO=${REPO:-awzwz/seruen}
+REPO=${REPO:-awzwz/seruen-astana}
 
 if ! gh repo view "$REPO" >/dev/null 2>&1; then
   warn "GitHub repo $REPO not found: Application seruen-apps NOT applied (file: deploy/platform/argocd/application.yaml)."

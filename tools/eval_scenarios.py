@@ -284,7 +284,7 @@ def write_report(results: list[dict], path: str, url: str | None) -> None:
     tmpl = sum(1 for t in texts if t.get("template"))
     lines = [
         "# Тест-сценарии Seruen", "",
-        f"Прогон: {datetime.now().strftime('%d.%m.%Y %H:%M')} · {'кластер ' + url if url else 'локально (тот же код в одном процессе)'}",
+        f"Прогон: {datetime.now().strftime('%d.%m.%Y %H:%M')} · {('локально, ' + url + ' (тот же код в одном процессе)') if url and ('127.0.0.1' in url or 'localhost' in url) else ('кластер ' + url) if url else 'локально (тот же код в одном процессе)'}",
         "Файл создаётся автоматически командой `python tools/eval_scenarios.py`. Каждая проверка — код, не ручная оценка.", "",
         "## Итог", "",
         "| Метрика | Значение |", "|---|---|",
