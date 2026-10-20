@@ -200,6 +200,7 @@ class Constraints(BaseModel):
     destination: Optional[Literal["airport", "train_station"]] = None   # where the user must be at the end
     night: bool = False
     tourist: bool = False
+    place_query: Optional[str] = None   # a specific kind of place to look up in all of 2GIS ("парикмахерская", "аптека")
     query_text: str = ""
     lang: Lang = "ru"
     parsed_by: Literal["llm", "rules"] = "rules"
@@ -266,6 +267,7 @@ class Card(BaseModel):
     reviews: int = 0
     transit: Optional[dict] = None       # 2GIS public transport option (bus, LRT …)
     taxi: Optional[dict] = None          # 2GIS car time with traffic + link to open the route in 2GIS
+    address: Optional[str] = None        # street address (2GIS / OSM) — key for a lookup like «аптека»
     score: float = 0.0
     score_parts: dict[str, float] = Field(default_factory=dict)
     status: Status = "active"

@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from seruen.common.clients import ServiceError, call, endpoint
 from seruen.common.config import ROOT, settings
-from seruen.common.geo import SLOW_M_PER_MIN, WALK_M_PER_MIN, DETOUR, geohash_decode, h3_cell, valid_geohash, walk_estimate
+from seruen.common.geo import SLOW_M_PER_MIN, WALK_M_PER_MIN, DETOUR, geohash_decode, h3_cell, haversine_m, valid_geohash, walk_estimate
 from seruen.common.models import (CATEGORIES, POI, Attr, Card, Constraints, Context, Explanation, RecommendRequest,
                                   TraceStep)
 from seruen.common.stores import publish
@@ -106,6 +106,37 @@ def _company(c: Constraints, lang: str) -> str:
     return ", ".join(parts)
 
 
+
+def _cat_label(poi: POI, lang: str) -> str:
+    """The 2GIS rubric for places outside the walking categories («Парикмахерские», «Аптеки»)."""
+    if poi.category == "other":
+        rub = poi.attributes.get("rubrics")
+        if rub and rub.value:
+            return str(rub.value[0])
+    return CATEGORIES.get(poi.category, CATEGORIES["other"])[lang]
+
+
+def _search_explanation(card: Card, c: Constraints, lang: str, found_by: list[str] | None = None) -> Explanation:
+    """Template text for a lookup («парикмахерская»): distance, hours and rating — facts only."""
+    q = c.place_query or ""
+    hours = (card.hours.label or "").split(" · ")[0]
+    hours = hours[:1].lower() + hours[1:] if hours else ""
+    rating = f"{card.rating:.1f}".replace(".", ",") if card.rating else None
+    facts = ", ".join(x[:1].lower() + x[1:] for x in found_by[:2]) if found_by else ""
+    if facts:
+        hours = (hours + ", " if hours else "") + facts
+    if lang == "kk":
+        why = f"{card.name} — жаяу {card.walk_min} мин" + (f", {hours}" if hours else "") + (f", 2GIS бағасы {rating}" if rating else "") + "."
+        todo = "Шығар алдында 2GIS-те жұмыс уақытын тексеріңіз — сол жерден қоңырау шалуға болады."
+    elif lang == "en":
+        why = f"{card.name} — {card.walk_min} min on foot" + (f", {hours}" if hours else "") + (f", rated {rating} on 2GIS" if rating else "") + "."
+        todo = "Check the hours in 2GIS before you go — you can call them from there."
+    else:
+        why = f"{card.name} — {card.walk_min} мин пешком" + (f", {hours}" if hours else "") + (f", рейтинг {rating} в 2GIS" if rating else "") + "."
+        todo = "Перед выходом проверьте часы работы в 2GIS — там же можно позвонить."
+    return Explanation(poi_id=card.poi_id, why=why, what_to_do=todo, source="poi_data", template=True)
+
+
 async def _step(trace: list[TraceStep], name: str, service: str, coro, detail_fn=None):
     t = time.perf_counter()
     res = await coro
@@ -153,150 +184,224 @@ async def recommend_stream(req: RecommendRequest):
         yield _sse("context", ctx.model_dump())
         yield _sse("constraints", c.model_dump())
 
-        radius = _radius(c)
-        qvec = await emb_task
-        cand = await _step(trace, "Поиск: радиус + слова + смысл", "retrieval", call("retrieval", "/v1/candidates", {
-            "origin": {"lat": lat, "lon": lon}, "radius_m": radius, "constraints": c.model_dump(),
-            "context": ctx.model_dump(), "query_vector": qvec}, timeout=8),
-            lambda r: f"{r['stats']['backend']} + 2GIS live ({r['stats']['live']['items']} мест, склеено {r['stats']['live']['merged']}) · радиус {r['stats']['radius_m']} м · подходят {r['stats']['kept']}"
-                      + (" · исключены " + ", ".join(f"{k}: {v}" for k, v in r["stats"]["excluded"].items()) if r["stats"]["excluded"] else ""))
-        if not cand["candidates"]:
-            yield _sse("cards", {"items": [], "route": None, "origin": {"lat": lat, "lon": lon, "cell": req.cell},
-                                 "empty_reason": "nothing_in_reach"})
-            yield _sse("trace", {"steps": [s.model_dump() for s in trace], "sent_to_llm": [], "not_sent": [], "model": None, "mode": "template"})
-            yield _sse("done", {"request_id": rid, "ai_generated": False, "fallback": True})
-            return
-        rank = await _step(trace, "Ранжирование: формула + разнообразие", "ranking", call("ranking", "/v1/rank", {
-            "candidates": cand["candidates"], "constraints": c.model_dump(), "context": ctx.model_dump(), "k": 15}, timeout=5),
-            lambda r: f"оценено {r['considered']} · веса " + " ".join(f"{k} {v}" for k, v in r["weights"].items()))
-        by_id = {x["poi"]["poi_id"]: x for x in cand["candidates"]}
-        ranked = rank["ranked"]
-        if c.wants or c.kids:   # stops must match what the user asked for; fall back to everything if nothing does
-            relevant = [r for r in ranked if r["matched"] or r["parts"]["relevance"] >= 0.3]
-            ranked = relevant or ranked
-        top_pois = [by_id[r["poi_id"]]["poi"] for r in ranked[:12]]
-        rt = await _step(trace, "Маршрут: минуты пешком, часы работы, порядок", "routing", call("routing", "/v1/route", {
-            "origin": {"lat": lat, "lon": lon}, "pois": top_pois, "ranked": ranked[:12], "constraints": c.model_dump(),
-            "context": ctx.model_dump()}, timeout=8),
-            lambda r: f"{r['method']} · бюджет {r['budget_min']} мин · " + (f"{len(r['route']['stops'])} остановки, {r['route']['total_min']} мин" if r.get("route") else "маршрут не собран"))
-        route = rt.get("route")
-        final_ids = list(route["stops"]) if route else []
-        roles = {pid: ("route" if len(final_ids) > 1 else "pick") for pid in final_ids}
-        if route and len(final_ids) < 3:   # add 1–2 backup options the user can choose instead
-            start_alt = datetime.fromisoformat(ctx.local_time)
-            for r in ranked:
-                if r["poi_id"] in final_ids:
-                    continue
-                poi = POI(**by_id[r["poi_id"]]["poi"])
-                st = status_at(poi, start_alt + timedelta(minutes=r["est_walk_min"]), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
-                fits = r["est_walk_min"] * (1 if c.destination else 2) + max(15, poi.visit_min // 2) \
-                    + (rt.get("to_destination_min") or 0) <= rt.get("budget_min", c.time_budget_min)
-                if st.status in ("open", "open_area") and r["score"] >= 0.35 and fits:
-                    final_ids.append(poi.poi_id)
-                    roles[poi.poi_id] = "alternative"
-                if len(final_ids) == 3:
-                    break
-        if not final_ids:      # no feasible route → best 1–3 places that are open
+        found_map: dict[str, list[str]] = {}
+        if c.place_query:
+            # ---- «найди парикмахерскую»: a specific kind of place, looked up in the whole 2GIS directory nearby
+            emb_task.cancel()
+            found = await _step(trace, {"ru": f"Поиск в 2GIS: «{c.place_query}»", "kk": f"2GIS-тен іздеу: «{c.place_query}»",
+                                        "en": f"2GIS search: “{c.place_query}”"}[lang], "places-live",
+                                call("places-live", "/v1/search", {"q": c.place_query, "lat": lat, "lon": lon}, timeout=9),
+                                lambda r: f"{len(r.get('pois') or [])} мест · радиус {r.get('radius_m') or '—'} м" + (f" · отброшено как не по теме: {r['dropped']}" if r.get("dropped") else ""))
+            radius = float(found.get("radius_m") or 1500)
             start = datetime.fromisoformat(ctx.local_time)
-            for r in ranked:
-                poi = POI(**by_id[r["poi_id"]]["poi"])
-                st = status_at(poi, start + timedelta(minutes=r["est_walk_min"]), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
-                late_unknown = st.status == "unknown" and ctx.is_dark and poi.category not in ("bar", "nightclub")
-                if st.status not in ("closed", "closes_soon") and not late_unknown:
-                    final_ids.append(poi.poi_id)
-                if len(final_ids) == 3:
-                    break
-            roles = {pid: "pick" for pid in final_ids}
-        # fresh canonical cards from the catalog (source of truth); retrieval data as fallback
-        try:
-            cat = await _step(trace, "Каталог: актуальные карточки", "catalog-api",
-                              call("catalog-api", "/v1/poi/get", {"ids": final_ids}, timeout=3),
-                              lambda r: f"{r['source']} · {len(r['pois'])} карточки")
-            fresh = cat["pois"]
-        except ServiceError:
-            fresh = {}
-        timeline = {x["poi_id"]: x for x in (route or {}).get("timeline", [])}
-        start = datetime.fromisoformat(ctx.local_time)
-        slow = c.kids > 0 or c.mobility != "walk"
-        cards: list[Card] = []
-        matched_map, reasons_map = {}, {}
-        rank_map = {r["poi_id"]: r for r in ranked}
-        for pid in final_ids:
-            cand_poi = by_id[pid]["poi"]
-            live_data = any(s.get("name") == "2gis" for s in cand_poi.get("sources", []))
-            poi = POI(**(cand_poi if live_data or pid not in fresh else fresh[pid]))
-            dist = by_id[pid]["distance_m"]
-            wm = rt["walk"].get(pid, {}).get("minutes") or walk_estimate(dist, slow)[1]
-            arrive = datetime.strptime(timeline[pid]["arrive"], "%H:%M").replace(
-                year=start.year, month=start.month, day=start.day, tzinfo=start.tzinfo) if pid in timeline else start + timedelta(minutes=wm)
-            if arrive < start:
-                arrive += timedelta(days=1)
-            hs = status_at(poi, arrive, poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
-            cat_meta = CATEGORIES.get(poi.category, CATEGORIES["other"])
-            r = rank_map.get(pid, {})
-            card = Card(poi_id=pid, name=poi.name.best(lang), category=poi.category, category_label=cat_meta[lang],
-                        lat=poi.lat, lon=poi.lon, distance_m=int(dist), walk_min=int(round(wm)),
-                        visit_min=int(timeline[pid].get("visit_min", poi.visit_min)) if pid in timeline else poi.visit_min,
-                        hours=hs, source_label=", ".join(_sources(poi)[:3]), sources=_sources(poi),
-                        accessibility=poi.attributes.get("wheelchair"), tags=poi.walk_tags,
-                        description=poi.description.text if poi.description else None,
-                        description_ai=bool(poi.description and poi.description.ai_generated),
-                        url=poi.website or (poi.description.url if poi.description else None),
-                        rating=poi.popularity.rating, reviews=poi.popularity.reviews,
-                        score=r.get("score", 0.0), score_parts=r.get("parts", {}), status=poi.status,
-                        role=roles.get(pid, "pick"))
-            cards.append(card)
-            matched_map[pid] = r.get("matched", [])
-            reasons_map[pid] = code_reasons(card, c, ctx, matched_map[pid])
-        # places the user named but that are beyond walking reach ("Думан" from EXPO) → honest card with a taxi hint
-        for far in cand.get("named_far", [])[:1]:
-            poi = POI(**far["poi"])
-            if poi.poi_id in {x.poi_id for x in cards} or len(cards) >= 3:
-                continue
-            tr_opt, tx_opt = await _moves((lat, lon), (poi.lat, poi.lon))
-            taxi_min = tx_opt["minutes"] if tx_opt else int(far["distance_m"] * 1.25 / 1000 / 55 * 60) + 5
-            hs = status_at(poi, start + timedelta(minutes=taxi_min), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
-            far_lbl = {"ru": f" · далеко пешком, на такси ≈ {taxi_min} мин", "kk": f" · жаяу алыс, таксимен ≈ {taxi_min} мин",
-                       "en": f" · too far to walk, ≈ {taxi_min} min by taxi"}[lang]
-            cat_meta = CATEGORIES.get(poi.category, CATEGORIES["other"])
-            cards.append(Card(poi_id=poi.poi_id, name=poi.name.best(lang), category=poi.category, category_label=cat_meta[lang],
-                              lat=poi.lat, lon=poi.lon, distance_m=int(far["distance_m"]),
-                              walk_min=walk_estimate(far["distance_m"], slow)[1], visit_min=poi.visit_min,
-                              hours=hs.model_copy(update={"label": hs.label + far_lbl}), source_label=", ".join(_sources(poi)[:3]),
-                              sources=_sources(poi), tags=poi.walk_tags, status=poi.status, role="alternative",
-                              description=poi.description.text if poi.description else None, transit=tr_opt, taxi=tx_opt))
-            matched_map[poi.poi_id] = []
-            reasons_map[poi.poi_id] = code_reasons(cards[-1], c, ctx, [])
-        # events from the afisha (only when the user asked for events or a night out)
-        if ("events" in c.wants or c.night) and cand.get("events"):
-            for ev in cand["events"][: max(1, 3 - len(cards))]:
-                e = ev["event"]
-                cards.append(Card(poi_id=e["event_id"], kind="event", name=e["title"], category="concert",
-                                  category_label={"ru": "Событие", "kk": "Іс-шара", "en": "Event"}[lang],
-                                  lat=e["lat"], lon=e["lon"], distance_m=int(ev["distance_m"]),
-                                  walk_min=walk_estimate(ev["distance_m"], slow)[1], visit_min=90,
-                                  hours=status_at(POI(poi_id="x", name={"ru": "x"}, lat=e["lat"], lon=e["lon"], geo_src="x", category="concert"),
-                                                  start, 90, lang)
-                                  .model_copy(update={"status": "open", "label": _event_label(e, lang), "level": "medium"}),
-                                  source_label="sxodim.com", sources=["sxodim.com"], url=e.get("url"),
-                                  event={"title": e["title"], "start": e["start"], "end": e.get("end"), "price": e.get("price_kzt"),
-                                         "venue": e.get("venue_name"), "url": e.get("url")}))
-                matched_map[e["event_id"]] = ["events"]
-                reasons_map[e["event_id"]] = code_reasons(cards[-1], c, ctx, ["events"])
-        to_dest = None
-        if c.destination:
-            from seruen.engine.route import AIRPORT, TRAIN_STATION
+            slow = c.kids > 0 or c.mobility != "walk"
+            options = []
+            for pj in found.get("pois") or []:
+                poi = POI(**pj)
+                dist = haversine_m(lat, lon, poi.lat, poi.lon)
+                wm = walk_estimate(dist, slow)[1]
+                options.append((poi, dist, wm, status_at(poi, start + timedelta(minutes=wm), 15, lang, ctx.is_dark, ctx.is_holiday)))
+            # open on arrival first, then unknown hours, then closed (shown honestly when nothing is open); nearest first
+            order = {"open": 0, "open_area": 0, "closes_soon": 1, "unknown": 2, "closed": 3}
+            options.sort(key=lambda o: (order.get(o[3].status, 2), o[1]))
+            options = options[:3]   # one place + two backups, like every answer
+            cand = {"stats": {"live": {"enabled": True, "queries": [c.place_query], "items": len(options), "merged": 0}}}
+            rt, route, to_dest = {}, None, None
+            cards, matched_map, reasons_map = [], {}, {}
+            if not options:
+                where = await where_task
+                yield _sse("cards", {"items": [], "route": None, "empty_reason": "search_nothing",
+                                     "origin": {"lat": lat, "lon": lon, "cell": req.cell, "address": where.get("address"),
+                                                "building": where.get("building"), "district": where.get("district")}})
+                trace.append(TraceStep(name="Итого", service="orchestrator", ms=round((time.perf_counter() - t_start) * 1000, 1),
+                                       detail="0 карточек · в 2GIS ничего не нашлось"))
+                yield _sse("trace", {"steps": [s.model_dump() for s in trace], "sent_to_llm": [], "not_sent": [],
+                                     "sent_to_2gis": f"в 2GIS: центр клетки ~150 м и запрос «{c.place_query}»", "model": None, "mode": "template"})
+                yield _sse("done", {"request_id": rid, "ai_generated": False, "fallback": False})
+                return
+            best = options[0]
+            if best[2] <= 30:   # walkable: a real 2GIS walking path to the nearest one
+                try:
+                    legs = (await call("places-live", "/v1/walk", {"points": [[lat, lon], [best[0].lat, best[0].lon]]}, timeout=5)).get("legs")
+                except ServiceError:
+                    legs = None
+                leg = (legs or [None])[0]
+                m = leg["minutes"] if leg else best[2]
+                arrive = start + timedelta(minutes=m)
+                route = {"stops": [best[0].poi_id], "total_min": m, "warm_stops": False,
+                         "legs": [{"from_id": "origin", "to_id": best[0].poi_id, "minutes": m, "outdoor_min": m,
+                                   "meters": leg["meters"] if leg else int(best[1] * DETOUR),
+                                   "geometry": leg["geometry"] if leg else [], "approx": not leg}],
+                         "timeline": [{"poi_id": best[0].poi_id, "arrive": arrive.strftime("%H:%M"), "leave": arrive.strftime("%H:%M"), "visit_min": 0}]}
+            for k, (poi, dist, wm, hs) in enumerate(options):
+                if k == 0 and route:
+                    wm = route["total_min"]
+                closeness = max(0.0, 1 - dist / 3000)
+                hours_v = {"open": 1.0, "open_area": 1.0, "closes_soon": 0.6, "unknown": 0.4, "closed": 0.0}.get(hs.status, 0.4)
+                pop = min(1.0, (poi.popularity.rating or 0) / 5)
+                parts = {"relevance": 1.0, "closeness": round(closeness, 2), "hours": hours_v, "popularity": round(pop, 2)}
+                card = Card(poi_id=poi.poi_id, name=poi.name.best(lang), category=poi.category, category_label=_cat_label(poi, lang),
+                            lat=poi.lat, lon=poi.lon, distance_m=int(dist), walk_min=int(wm), visit_min=0, hours=hs,
+                            source_label=", ".join(_sources(poi)[:3]), sources=_sources(poi),
+                            accessibility=poi.attributes.get("wheelchair"), tags=poi.walk_tags,
+                            description=poi.description.text if poi.description else None, address=poi.address,
+                            rating=poi.popularity.rating, reviews=poi.popularity.reviews,
+                            score=round(0.35 + 0.25 * closeness + 0.25 * hours_v + 0.15 * pop, 3), score_parts=parts,
+                            status=poi.status, role="pick" if k == 0 else "alternative")
+                if k == 0 and wm > 30:   # too far to walk: taxi and public transport from 2GIS
+                    tr_opt, tx_opt = await _moves((lat, lon), (poi.lat, poi.lon))
+                    card = card.model_copy(update={"transit": tr_opt, "taxi": tx_opt})
+                cards.append(card)
+                matched_map[poi.poi_id] = []
+                reasons_map[poi.poi_id] = code_reasons(card, c, ctx, [])
+                fb = poi.attributes.get("found_by")
+                if fb and fb.value:
+                    found_map[poi.poi_id] = list(fb.value)
+        else:
+            radius = _radius(c)
+            qvec = await emb_task
+            cand = await _step(trace, "Поиск: радиус + слова + смысл", "retrieval", call("retrieval", "/v1/candidates", {
+                "origin": {"lat": lat, "lon": lon}, "radius_m": radius, "constraints": c.model_dump(),
+                "context": ctx.model_dump(), "query_vector": qvec}, timeout=8),
+                lambda r: f"{r['stats']['backend']} + 2GIS live ({r['stats']['live']['items']} мест, склеено {r['stats']['live']['merged']}) · радиус {r['stats']['radius_m']} м · подходят {r['stats']['kept']}"
+                          + (" · исключены " + ", ".join(f"{k}: {v}" for k, v in r["stats"]["excluded"].items()) if r["stats"]["excluded"] else ""))
+            if not cand["candidates"]:
+                yield _sse("cards", {"items": [], "route": None, "origin": {"lat": lat, "lon": lon, "cell": req.cell},
+                                     "empty_reason": "nothing_in_reach"})
+                yield _sse("trace", {"steps": [s.model_dump() for s in trace], "sent_to_llm": [], "not_sent": [], "model": None, "mode": "template"})
+                yield _sse("done", {"request_id": rid, "ai_generated": False, "fallback": True})
+                return
+            rank = await _step(trace, "Ранжирование: формула + разнообразие", "ranking", call("ranking", "/v1/rank", {
+                "candidates": cand["candidates"], "constraints": c.model_dump(), "context": ctx.model_dump(), "k": 15}, timeout=5),
+                lambda r: f"оценено {r['considered']} · веса " + " ".join(f"{k} {v}" for k, v in r["weights"].items()))
+            by_id = {x["poi"]["poi_id"]: x for x in cand["candidates"]}
+            ranked = rank["ranked"]
+            if c.wants or c.kids:   # stops must match what the user asked for; fall back to everything if nothing does
+                relevant = [r for r in ranked if r["matched"] or r["parts"]["relevance"] >= 0.3]
+                ranked = relevant or ranked
+            top_pois = [by_id[r["poi_id"]]["poi"] for r in ranked[:12]]
+            rt = await _step(trace, "Маршрут: минуты пешком, часы работы, порядок", "routing", call("routing", "/v1/route", {
+                "origin": {"lat": lat, "lon": lon}, "pois": top_pois, "ranked": ranked[:12], "constraints": c.model_dump(),
+                "context": ctx.model_dump()}, timeout=8),
+                lambda r: f"{r['method']} · бюджет {r['budget_min']} мин · " + (f"{len(r['route']['stops'])} остановки, {r['route']['total_min']} мин" if r.get("route") else "маршрут не собран"))
+            route = rt.get("route")
+            final_ids = list(route["stops"]) if route else []
+            roles = {pid: ("route" if len(final_ids) > 1 else "pick") for pid in final_ids}
+            if route and len(final_ids) < 3:   # add 1–2 backup options the user can choose instead
+                start_alt = datetime.fromisoformat(ctx.local_time)
+                for r in ranked:
+                    if r["poi_id"] in final_ids:
+                        continue
+                    poi = POI(**by_id[r["poi_id"]]["poi"])
+                    st = status_at(poi, start_alt + timedelta(minutes=r["est_walk_min"]), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
+                    fits = r["est_walk_min"] * (1 if c.destination else 2) + max(15, poi.visit_min // 2) \
+                        + (rt.get("to_destination_min") or 0) <= rt.get("budget_min", c.time_budget_min)
+                    if st.status in ("open", "open_area") and r["score"] >= 0.35 and fits:
+                        final_ids.append(poi.poi_id)
+                        roles[poi.poi_id] = "alternative"
+                    if len(final_ids) == 3:
+                        break
+            if not final_ids:      # no feasible route → best 1–3 places that are open
+                start = datetime.fromisoformat(ctx.local_time)
+                for r in ranked:
+                    poi = POI(**by_id[r["poi_id"]]["poi"])
+                    st = status_at(poi, start + timedelta(minutes=r["est_walk_min"]), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
+                    late_unknown = st.status == "unknown" and ctx.is_dark and poi.category not in ("bar", "nightclub")
+                    if st.status not in ("closed", "closes_soon") and not late_unknown:
+                        final_ids.append(poi.poi_id)
+                    if len(final_ids) == 3:
+                        break
+                roles = {pid: "pick" for pid in final_ids}
+            # fresh canonical cards from the catalog (source of truth); retrieval data as fallback
+            try:
+                cat = await _step(trace, "Каталог: актуальные карточки", "catalog-api",
+                                  call("catalog-api", "/v1/poi/get", {"ids": final_ids}, timeout=3),
+                                  lambda r: f"{r['source']} · {len(r['pois'])} карточки")
+                fresh = cat["pois"]
+            except ServiceError:
+                fresh = {}
+            timeline = {x["poi_id"]: x for x in (route or {}).get("timeline", [])}
+            start = datetime.fromisoformat(ctx.local_time)
+            slow = c.kids > 0 or c.mobility != "walk"
+            cards: list[Card] = []
+            matched_map, reasons_map = {}, {}
+            rank_map = {r["poi_id"]: r for r in ranked}
+            for pid in final_ids:
+                cand_poi = by_id[pid]["poi"]
+                live_data = any(s.get("name") == "2gis" for s in cand_poi.get("sources", []))
+                poi = POI(**(cand_poi if live_data or pid not in fresh else fresh[pid]))
+                dist = by_id[pid]["distance_m"]
+                wm = rt["walk"].get(pid, {}).get("minutes") or walk_estimate(dist, slow)[1]
+                arrive = datetime.strptime(timeline[pid]["arrive"], "%H:%M").replace(
+                    year=start.year, month=start.month, day=start.day, tzinfo=start.tzinfo) if pid in timeline else start + timedelta(minutes=wm)
+                if arrive < start:
+                    arrive += timedelta(days=1)
+                hs = status_at(poi, arrive, poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
+                cat_meta = CATEGORIES.get(poi.category, CATEGORIES["other"])
+                r = rank_map.get(pid, {})
+                card = Card(poi_id=pid, name=poi.name.best(lang), category=poi.category, category_label=cat_meta[lang],
+                            lat=poi.lat, lon=poi.lon, distance_m=int(dist), walk_min=int(round(wm)),
+                            visit_min=int(timeline[pid].get("visit_min", poi.visit_min)) if pid in timeline else poi.visit_min,
+                            hours=hs, source_label=", ".join(_sources(poi)[:3]), sources=_sources(poi),
+                            accessibility=poi.attributes.get("wheelchair"), tags=poi.walk_tags,
+                            description=poi.description.text if poi.description else None,
+                            description_ai=bool(poi.description and poi.description.ai_generated),
+                            url=poi.website or (poi.description.url if poi.description else None), address=poi.address,
+                            rating=poi.popularity.rating, reviews=poi.popularity.reviews,
+                            score=r.get("score", 0.0), score_parts=r.get("parts", {}), status=poi.status,
+                            role=roles.get(pid, "pick"))
+                cards.append(card)
+                matched_map[pid] = r.get("matched", [])
+                reasons_map[pid] = code_reasons(card, c, ctx, matched_map[pid])
+            # places the user named but that are beyond walking reach ("Думан" from EXPO) → honest card with a taxi hint
+            for far in cand.get("named_far", [])[:1]:
+                poi = POI(**far["poi"])
+                if poi.poi_id in {x.poi_id for x in cards} or len(cards) >= 3:
+                    continue
+                tr_opt, tx_opt = await _moves((lat, lon), (poi.lat, poi.lon))
+                taxi_min = tx_opt["minutes"] if tx_opt else int(far["distance_m"] * 1.25 / 1000 / 55 * 60) + 5
+                hs = status_at(poi, start + timedelta(minutes=taxi_min), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
+                far_lbl = {"ru": f" · далеко пешком, на такси ≈ {taxi_min} мин", "kk": f" · жаяу алыс, таксимен ≈ {taxi_min} мин",
+                           "en": f" · too far to walk, ≈ {taxi_min} min by taxi"}[lang]
+                cat_meta = CATEGORIES.get(poi.category, CATEGORIES["other"])
+                cards.append(Card(poi_id=poi.poi_id, name=poi.name.best(lang), category=poi.category, category_label=cat_meta[lang],
+                                  lat=poi.lat, lon=poi.lon, distance_m=int(far["distance_m"]),
+                                  walk_min=walk_estimate(far["distance_m"], slow)[1], visit_min=poi.visit_min,
+                                  hours=hs.model_copy(update={"label": hs.label + far_lbl}), source_label=", ".join(_sources(poi)[:3]),
+                                  sources=_sources(poi), tags=poi.walk_tags, status=poi.status, role="alternative",
+                                  description=poi.description.text if poi.description else None, transit=tr_opt, taxi=tx_opt))
+                matched_map[poi.poi_id] = []
+                reasons_map[poi.poi_id] = code_reasons(cards[-1], c, ctx, [])
+            # events from the afisha (only when the user asked for events or a night out)
+            if ("events" in c.wants or c.night) and cand.get("events"):
+                for ev in cand["events"][: max(1, 3 - len(cards))]:
+                    e = ev["event"]
+                    cards.append(Card(poi_id=e["event_id"], kind="event", name=e["title"], category="concert",
+                                      category_label={"ru": "Событие", "kk": "Іс-шара", "en": "Event"}[lang],
+                                      lat=e["lat"], lon=e["lon"], distance_m=int(ev["distance_m"]),
+                                      walk_min=walk_estimate(ev["distance_m"], slow)[1], visit_min=90,
+                                      hours=status_at(POI(poi_id="x", name={"ru": "x"}, lat=e["lat"], lon=e["lon"], geo_src="x", category="concert"),
+                                                      start, 90, lang)
+                                      .model_copy(update={"status": "open", "label": _event_label(e, lang), "level": "medium"}),
+                                      source_label="sxodim.com", sources=["sxodim.com"], url=e.get("url"),
+                                      event={"title": e["title"], "start": e["start"], "end": e.get("end"), "price": e.get("price_kzt"),
+                                             "venue": e.get("venue_name"), "url": e.get("url")}))
+                    matched_map[e["event_id"]] = ["events"]
+                    reasons_map[e["event_id"]] = code_reasons(cards[-1], c, ctx, ["events"])
+            to_dest = None
+            if c.destination:
+                from seruen.engine.route import AIRPORT, TRAIN_STATION
 
-            dest_pt = AIRPORT if c.destination == "airport" else TRAIN_STATION
-            last = next((x for x in reversed(cards) if x.role in ("route", "pick") and x.kind == "poi"), None)
-            frm = (last.lat, last.lon) if last else (lat, lon)
-            tr_opt, tx_opt = await _moves(frm, dest_pt)
-            to_dest = {"name": {"airport": {"ru": "аэропорт", "kk": "әуежай", "en": "the airport"},
-                                "train_station": {"ru": "вокзал Нұрлы Жол", "kk": "Нұрлы Жол вокзалы", "en": "Nurly Zhol station"}}[c.destination][lang],
-                       "from": last.name if last else None, "transit": tr_opt, "taxi": tx_opt}
-            trace.append(TraceStep(name="Дорога дальше: такси и транспорт", service="places-live",
-                                   ms=0, detail=("такси ≈ " + str(tx_opt["minutes"]) + " мин" if tx_opt else "такси —") +
-                                   (" · транспорт ≈ " + str(tr_opt["minutes"]) + " мин" if tr_opt else " · транспорт —") + " · 2GIS"))
+                dest_pt = AIRPORT if c.destination == "airport" else TRAIN_STATION
+                last = next((x for x in reversed(cards) if x.role in ("route", "pick") and x.kind == "poi"), None)
+                frm = (last.lat, last.lon) if last else (lat, lon)
+                tr_opt, tx_opt = await _moves(frm, dest_pt)
+                to_dest = {"name": {"airport": {"ru": "аэропорт", "kk": "әуежай", "en": "the airport"},
+                                    "train_station": {"ru": "вокзал Нұрлы Жол", "kk": "Нұрлы Жол вокзалы", "en": "Nurly Zhol station"}}[c.destination][lang],
+                           "from": last.name if last else None, "transit": tr_opt, "taxi": tx_opt}
+                trace.append(TraceStep(name="Дорога дальше: такси и транспорт", service="places-live",
+                                       ms=0, detail=("такси ≈ " + str(tx_opt["minutes"]) + " мин" if tx_opt else "такси —") +
+                                       (" · транспорт ≈ " + str(tr_opt["minutes"]) + " мин" if tr_opt else " · транспорт —") + " · 2GIS"))
         where = await where_task
         yield _sse("cards", {"items": [x.model_dump() for x in cards], "route": route,
                              "origin": {"lat": lat, "lon": lon, "cell": req.cell, "address": where.get("address"),
@@ -314,7 +419,7 @@ async def recommend_stream(req: RecommendRequest):
         else:
             sent_2gis = None
         expl: dict[str, Explanation] = {}
-        if not req.no_ai and cards:
+        if not req.no_ai and cards and not c.place_query:   # a lookup answers with facts only: distance, hours, rating
             sent = ["текст запроса", "фильтры и теги", "режим погоды и время суток", f"факты о {len(cards)} выбранных местах"]
             ex_p = {"cards": [x.model_dump() for x in cards], "lang": lang, "query_text": c.query_text,
                     "company": _company(c, lang), "mode_reason": ctx.mode_reason,
@@ -334,7 +439,8 @@ async def recommend_stream(req: RecommendRequest):
                     expl[it["poi_id"]] = Explanation(**it)
                 mode = "ai"
         for card in cards:
-            e = expl.get(card.poi_id) or template_explanation(card, c, ctx, matched_map.get(card.poi_id, []))
+            e = expl.get(card.poi_id) or (_search_explanation(card, c, lang, found_map.get(card.poi_id)) if c.place_query
+                                          else template_explanation(card, c, ctx, matched_map.get(card.poi_id, [])))
             yield _sse("text", e.model_dump())
         if mode == "ai" and len(expl) < len(cards):
             mode = "ai+template"

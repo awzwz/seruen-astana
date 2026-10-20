@@ -48,6 +48,50 @@ _PATTERNS: list[tuple[str, str]] = [
     ("accessible", r"без лестниц|пандус|лифт|доступн|ramp|step.free|accessible"),
 ]
 
+# A specific kind of place that is not a walk intent: looked up in the whole 2GIS directory (Russian phrase for 2GIS).
+PLACE_QUERIES: list[tuple[str, str]] = [
+    (r"парикмахер|барбер|постричь|подстричь|стрижк|шаштараз|barber|hairdress|haircut", "парикмахерская"),
+    (r"маникюр|педикюр|ногт[иея]|салон красоты|сұлулық салон|nail salon|manicure|beauty salon", "салон красоты"),
+    (r"аптек|лекарств|дәріхана|pharmac|drugstore|chemist", "аптека"),
+    (r"банкомат|снять (деньги|наличн)|\batm\b|cash machine", "банкомат"),
+    (r"обменник|обмен валют|айырбастау|currency exchange|exchange office", "обмен валют"),
+    (r"\bбанк(\b|[аеуи]\b|ов\b)|\bbank\b", "банк"),
+    (r"заправк|\bазс\b|бензин|жанармай|gas station|petrol station|fuel", "АЗС"),
+    (r"электрозаправ|ev charg", "электрозаправка"),
+    (r"шиномонтаж|tyre service|tire service", "шиномонтаж"),
+    (r"автомойк|car ?wash", "автомойка"),
+    (r"автосервис|ремонт (авто|машин)|car (service|repair)", "автосервис"),
+    (r"туалет|уборн|дәретхана|\bwc\b|toilet|restroom", "туалет"),
+    (r"стоматолог|зубн|тіс дәрігер|dentist", "стоматология"),
+    (r"травмпункт|больниц|поликлиник|аурухана|емхана|hospital|clinic|emergency room", "поликлиника"),
+    (r"ветеринар|ветклиник|\bvet\b", "ветеринарная клиника"),
+    (r"супермаркет|гастроном|продукт(ы|ов|овый)|азық-түлік|grocery|supermarket", "супермаркет"),
+    (r"цветочн|букет|купить цвет|florist|flower shop", "цветы"),
+    (r"почт(а|у|ы|ой|е)\b|почтов|казпочт|post office", "почта"),
+    (r"\bцон\b|спеццон|халыққа қызмет|public service cent", "ЦОН"),
+    (r"нотариус|notary", "нотариус"),
+    (r"химчистк|dry clean", "химчистка"),
+    (r"прачечн|laundr", "прачечная"),
+    (r"ремонт (телефон|смартфон|ноутбук)|phone repair", "ремонт телефонов"),
+    (r"сим-?карт|салон связи|sim card", "салон связи"),
+    (r"ремонт обуви|shoe repair", "ремонт обуви"),
+    (r"фото на документ|ксерокс|распечат|печать документ|копицентр|copy cent|printing", "копицентр"),
+    (r"массаж|massage", "массаж"),
+    (r"сауна|баня|хаммам|монша|sauna", "сауна"),
+    (r"тренажёрн|тренажерн|фитнес|\bgym\b|fitness", "фитнес-клуб"),
+    (r"гостиниц|отель|хостел|қонақ үй|hotel|hostel", "гостиница"),
+    (r"парковк|паркинг|автотұрақ|parking", "парковка"),
+]
+
+
+def parse_place_query(text: str) -> str | None:
+    t = (text or "").lower()
+    for pat, q in PLACE_QUERIES:
+        if re.search(pat, t):
+            return q
+    return None
+
+
 _KK = set("әғқңөұүһі")
 
 
@@ -127,6 +171,10 @@ def parse_rules(text: str, chips: Chips, lang: str) -> Constraints:
     if c.destination == "airport" and not c.wants:
         c.tourist = True
         c.wants = ["landmark", "food"]
+    pq = parse_place_query(t)
+    if pq:   # «найди парикмахерскую»: a lookup in 2GIS, not a walk
+        c.place_query = pq
+        c.want_route = False
     walk_words = re.search(r"прогул|погуля|маршрут|пройт|серуен|walk|stroll|route|\bпешком", t)
     if c.wants and set(c.wants) <= {"coffee", "quiet", "power", "food"} and not walk_words:
         c.want_route = False

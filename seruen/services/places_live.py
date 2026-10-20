@@ -85,10 +85,10 @@ def _hours(schedule: dict | None) -> str | None:
     return "; ".join(parts) or None
 
 
-def to_poi(it: dict, query: str) -> POI | None:
+def to_poi(it: dict, query: str, any_category: bool = False) -> POI | None:
     pt = it.get("point") or {}
     rubrics = [r.get("name", "") for r in it.get("rubrics") or []]
-    cat = _category(rubrics)
+    cat = _category(rubrics) or ("other" if any_category else None)   # a lookup keeps barbershops, pharmacies…
     if not cat or "lat" not in pt:
         return None
     attrs = [a.get("name", "") for g in it.get("attribute_groups") or [] for a in g.get("attributes") or []]
@@ -127,6 +127,8 @@ def to_poi(it: dict, query: str) -> POI | None:
     nrev = int(rv.get("general_review_count") or 0)
     facts = [a for a in attrs if not any(s in a.lower() for s in SKIP_ATTR)][:4]
     name = (it.get("name") or "").split(",")[0].strip()
+    if not name:   # public toilets, ATMs… have no name in 2GIS: use the rubric («Туалеты») instead of an empty card
+        name = rubrics[0] if rubrics else query
     return POI(
         poi_id=f"2gis:{it['id']}", name=Names(ru=name, alt=[it.get("name", "")] if it.get("name") != name else []),
         lat=pt["lat"], lon=pt["lon"], geo_src="2gis", category=cat, walk_tags=sorted(tags),
@@ -194,6 +196,54 @@ async def nearby(p: dict) -> dict:
                 pois.append(poi.model_dump(mode="json"))
     return {"pois": pois, "stats": {"enabled": True, "queries": qs, "requests": len(qs), "items": len(pois),
                                     "ms": round((time.perf_counter() - t) * 1000)}}
+
+
+@endpoint("places-live", "/v1/search")
+async def search(p: dict) -> dict:
+    """Any kind of place by text («парикмахерская», «аптека», «Magnum») near the cell centre, nearest first.
+    The radius grows 1.5 → 4 → 10 km until there are at least 3 results."""
+    q = str(p.get("q") or "").strip()[:80]
+    if not q:
+        return {"pois": [], "radius_m": None, "reason": "empty"}
+    if not K.keys():
+        return {"pois": [], "radius_m": None, "reason": "no_key"}
+    lat, lon = p["lat"], p["lon"]
+    t = time.perf_counter()
+    pois, seen, radius, dropped = [], set(), None, 0
+    stems = [w[:5] for w in q.lower().replace("-", " ").split() if len(w) >= 4]
+    try:
+        async with httpx.AsyncClient(timeout=3.5) as c:
+            for radius in (1500, 4000, 10000):
+                st, d = await K.request("places", "GET", API, client=c, params={
+                    "q": q, "point": f"{lon:.6f},{lat:.6f}", "radius": radius, "sort": "distance",
+                    "type": "branch,attraction", "fields": FIELDS + ",items.context", "page_size": 10, "locale": "ru_KZ"})
+                if d and (d.get("meta") or {}).get("code") == 200:
+                    res = d.get("result") or {}
+                    for it in res.get("items") or []:
+                        if it.get("id") in seen:
+                            continue
+                        seen.add(it.get("id"))
+                        factors = (it.get("context") or {}).get("stop_factors") or []
+                        # a rubric match counts; an attribute only when it carries the words («Плов в меню»), not «Доставка»
+                        found_by = [f for f in factors if f.get("type") == "rubric" or
+                                    (f.get("type") == "attribute" and any(s in (f.get("name") or "").lower() for s in stems))]
+                        name_hit = any(s in (it.get("name") or "").lower() for s in stems)
+                        # 2GIS also answers nonsense with whatever is near («ремонт летающих тарелок» → a circus):
+                        # keep a result only when 2GIS matched it by rubric / attribute or the name has the words
+                        if not found_by and not name_hit:
+                            dropped += 1
+                            continue
+                        poi = to_poi(it, q, any_category=True)
+                        if poi:
+                            facts = [f["name"] for f in factors if f.get("type") == "attribute" and f.get("name")][:3]
+                            if facts:
+                                poi.attributes["found_by"] = Attr(value=facts, src="2gis")
+                            pois.append(poi.model_dump(mode="json"))
+                if len(pois) >= 3:
+                    break
+    except Exception as e:
+        return {"pois": pois, "radius_m": radius, "reason": type(e).__name__}
+    return {"pois": pois[:10], "radius_m": radius, "dropped": dropped, "ms": round((time.perf_counter() - t) * 1000)}
 
 
 # ============================================================ 2GIS gateway: where / suggest / walk / transit / taxi

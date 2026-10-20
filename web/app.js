@@ -1310,7 +1310,8 @@
     if (!r) { h.textContent = ''; return; }
     const total = r.route && r.route.total_min;
     const budget = r.constraints && r.constraints.time_budget_min;
-    h.textContent = !r.cards ? t('submitting') : total ? t('plan_title', {n: total}) : budget ? t('plan_title', {n: budget}) : t('plan_title_free');
+    const pq = r.constraints && r.constraints.place_query;
+    h.textContent = !r.cards ? t('submitting') : pq ? t('search_title', {q: pq}) : total ? t('plan_title', {n: total}) : budget ? t('plan_title', {n: budget}) : t('plan_title_free');
   }
 
   function renderAll(animate) {
@@ -1371,10 +1372,11 @@
     const box = $('#constraints');
     if (!c) { box.innerHTML = ''; return; }
     const bits = [];
-    if (c.time_budget_min) bits.push(c.time_budget_min + ' ' + t('min'));
-    if (c.adults) bits.push(t('c_adults', {n: c.adults}));
+    if (c.place_query) bits.push(t('c_search', {q: c.place_query}));
+    if (c.time_budget_min && !c.place_query) bits.push(c.time_budget_min + ' ' + t('min'));
+    if (c.adults && !c.place_query) bits.push(t('c_adults', {n: c.adults}));
     if (c.kids) bits.push(t('c_kids', {n: c.kids}));
-    if (c.mobility) bits.push(t('mob_' + c.mobility));
+    if (c.mobility && !(c.place_query && c.mobility === 'walk')) bits.push(t('mob_' + c.mobility));
     if (c.reserve_min) bits.push(t('c_reserve', {n: c.reserve_min}));
     if (c.must_return) bits.push(t('c_return'));
     if (c.destination) bits.push(t('c_dest_' + c.destination));
@@ -1406,7 +1408,8 @@
     } else if (r && r.toDest != null && isFinite(r.toDest)) {
       dest = '<p class="prov" style="--pc:var(--blue)">' + icon(destKey === 'dest_airport' ? 'plane' : 'arrow') + '<span>' + esc(t(destKey, {n: Math.round(r.toDest)})) + '</span></p>';
     }
-    if (!route || !Array.isArray(route.stops) || !route.stops.length) { box.innerHTML = dest; return; }
+    const lookup = !!(r && r.constraints && r.constraints.place_query);
+    if (lookup || !route || !Array.isArray(route.stops) || !route.stops.length) { box.innerHTML = dest; return; }
     const view = cardView();
     const idxById = {};
     (r.cards || []).forEach((c, i) => { idxById[c.poi_id] = i; });
@@ -1543,7 +1546,7 @@
     return v + ' ' + plural(n, ['отзыв', 'отзыва', 'отзывов']) + ' в 2GIS';
   }
   function cardCat(card) {
-    const catText = (card.kind !== 'event' && catLabel(card.category)) || card.category_label || '';
+    const catText = (card.kind !== 'event' && card.category !== 'other' && catLabel(card.category)) || card.category_label || '';
     const tags = [];
     (card.tags || []).forEach((x) => {
       const lbl = x === 'event' ? '' : tagLabel(x);
@@ -1631,6 +1634,7 @@
     else expBody = expPending();
     const route = dirLink(card);
     const meta = ['<span>' + icon('walk') + ' <b>' + esc(walk.min + ' ' + t('min')) + '</b> · ' + esc(fmtDist(walk.m)) + '</span>'];
+    if (card.address) meta.push('<span>' + icon('pin') + ' ' + esc(card.address) + '</span>');
     if (card.visit_min) meta.push('<span>' + icon('hourglass') + ' ' + esc(t('visit', {n: card.visit_min})) + '</span>');
     if (acc && acc.key !== 'access_unknown') meta.push('<span>' + icon('wheelchair') + ' ' + esc(t(acc.key)) + '</span>');
     if (card.taxi) meta.push('<span>' + icon('car') + ' ' + esc(card.taxi.minutes + ' ' + t('min')) + '</span>');
@@ -1663,13 +1667,16 @@
     const box = $('#cards');
     if (!r || !r.cards) return;
     if (!r.cards.length) {
-      box.innerHTML = '<div class="list tiles"><div class="row top">' + tile('search', 'var(--gray)') + '<span class="t">' + esc(t('nothing_found')) + '</span><span></span></div></div>';
+      const pq0 = r.constraints && r.constraints.place_query;
+      box.innerHTML = '<div class="list tiles"><div class="row top">' + tile('search', 'var(--gray)') + '<span class="t">' +
+        esc(pq0 ? t('search_none', {q: pq0}) : t('nothing_found')) + '</span><span></span></div></div>';
       return;
     }
     const view = cardView();
+    const lookup = !!(r.constraints && r.constraints.place_query);
     box.innerHTML = '<div class="view">' + view.main.map((x) => heroHTML(x.c, x.i, animate)).join('') +
-      (view.alts.length ? '<section class="sec"><div class="sec-h"><h3>' + esc(t('if_not')) + '</h3><span>' + esc(t('alt_sub')) + '</span></div><div class="list">' +
-        view.alts.map((x) => altRowHTML(x.c, x.i)).join('') + '</div><p class="sec-f">' + esc(t('alt_hint')) + '</p></section>' : '') + '</div>';
+      (view.alts.length ? '<section class="sec"><div class="sec-h"><h3>' + esc(t(lookup ? 'search_more' : 'if_not')) + '</h3><span>' + esc(t(lookup ? 'search_sub' : 'alt_sub')) + '</span></div><div class="list">' +
+        view.alts.map((x) => altRowHTML(x.c, x.i)).join('') + '</div>' + (lookup ? '' : '<p class="sec-f">' + esc(t('alt_hint')) + '</p>') + '</section>' : '') + '</div>';
   }
 
   function applyText(exp, animate) {
@@ -1739,7 +1746,8 @@
     });
     const d = r.done;
     let key = d.ai_generated ? 'done_ai' : 'done_tpl';
-    if (r.noAi) key = 'done_noai';
+    if (r.constraints && r.constraints.place_query) key = 'done_search';
+    else if (r.noAi) key = 'done_noai';
     else if (d.fallback) key = d.ai_generated ? 'done_partial' : 'done_fallback';
     const warn = key === 'done_fallback' || key === 'done_partial';
     box.innerHTML = '<p class="prov' + (warn ? ' warn' : '') + '" style="--pc:' + (d.ai_generated ? 'var(--purple)' : 'var(--tint)') + '">' + icon(warn ? 'alert' : d.ai_generated ? 'sparkle' : 'check') +
@@ -1865,6 +1873,7 @@
       rows.push('<div class="row top"><span class="icn">' + icon(hp.level === 'open_area' ? 'tree' : 'clock') + '</span><span class="t">' + hoursLine(card.hours) +
         (['high', 'medium', 'low'].includes(hp.level) ? '<span class="s">' + esc(cap1(t('lvl_' + hp.level))) + '</span>' : '') + '</span><span></span></div>');
     }
+    if (card.address) rows.push('<div class="row"><span class="icn">' + icon('pin') + '</span><span class="t">' + esc(card.address) + '</span><span></span></div>');
     rows.push('<div class="row"><span class="icn">' + icon('walk') + '</span><span class="t">' + esc(t('card_walk', {min: walk.min, dist: fmtDist(walk.m)})) + '</span><span></span></div>');
     if (card.visit_min) rows.push('<div class="row"><span class="icn">' + icon('hourglass') + '</span><span class="t">' + esc(cap1(t('visit', {n: card.visit_min}))) + '</span><span></span></div>');
     if (acc) rows.push('<div class="row"><span class="icn">' + icon('wheelchair') + '</span><span class="t">' + esc(t(acc.key)) + (acc.src ? '<span class="s">' + esc(t('per_src', {src: acc.src})) + '</span>' : '') + '</span><span></span></div>');
