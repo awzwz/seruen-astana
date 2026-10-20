@@ -1,4 +1,4 @@
-/* Seruen web client — static, no build step.
+/* Seruen web client — static, no build step. Design G «2GIS × iOS» (sheet with detents / floating panel, inset lists).
    Talks to the orchestrator: POST /api/recommend (SSE), GET /api/landmarks,
    POST /api/feedback, DELETE /api/session/{id}. Contract: docs/CONTRACTS.md.
    Privacy: the exact point lives only in memory here; the server receives a geohash-7 cell. */
@@ -14,7 +14,7 @@
   const WALK_M_PER_MIN = 75;        // 4.5 km/h
   const STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/liberty';
   const STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
-  const KEYS = {lang: 'seruen.lang', chips: 'seruen.chips', session: 'seruen.session'};
+  const KEYS = {lang: 'seruen.lang', chips: 'seruen.chips', session: 'seruen.session', theme: 'seruen.theme'};
   const MOCK_FILE = 'mock/sample_stream.txt';
   const MOCK_DELAY = {context: 420, constraints: 380, cards: 950, text: 820, trace: 420, done: 260, error: 200};
   // Exact start of the recorded example (kept in the browser, like any exact point).
@@ -63,7 +63,7 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const reduceMotionMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
   const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
-  const mobileMQ = window.matchMedia('(max-width: 959px)');
+  const mobileMQ = window.matchMedia('(max-width: 999.98px)');
   const motionOK = () => !reduceMotionMQ.matches;
 
   const LS = {
@@ -120,7 +120,30 @@
     car: '<path d="M4 15.5V12l2-5h12l2 5v3.5"/><path d="M3.5 15.5h17v3h-17z"/><circle cx="7.5" cy="18.5" r="1.3"/><circle cx="16.5" cy="18.5" r="1.3"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>',
-    spark: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>'
+    spark: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+    // SF-Symbols-like glyphs for design G
+    gear: '<circle cx="12" cy="12" r="5.9"/><circle cx="12" cy="12" r="2.3"/><circle cx="12" cy="12" r="8.3" stroke-width="2.7" stroke-dasharray="2.6 3.92" stroke-linecap="butt"/>',
+    xfill: '<circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="var(--cell)" stroke-width="2.2"/>',
+    chevR: '<path d="M9.5 5.5l6.5 6.5-6.5 6.5"/>',
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    loc: '<path d="M20.5 3.5L3.5 10.6l7.2 2.7 2.7 7.2z" fill="currentColor"/>',
+    pinf: '<path d="M12 22s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="2.6" fill="rgba(0,0,0,.25)" stroke="none"/>',
+    map: '<path d="M9 4.5L3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5zM9 4.5v13M15 6.5v13"/>',
+    dirs: '<path d="M12 2.8l9.2 9.2-9.2 9.2L2.8 12z"/><path d="M9 14.5v-2.5a1.5 1.5 0 0 1 1.5-1.5H15M13 8.5l2 2-2 2"/>',
+    hourglass: '<path d="M7 3.5h10M7 20.5h10M8 3.5c0 4.5 4 5.5 4 8.5s-4 4-4 8.5M16 3.5c0 4.5-4 5.5-4 8.5s4 4 4 8.5"/>',
+    starf: '<path d="M12 3.2l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.6l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" fill="currentColor" stroke="none"/>',
+    seal: '<path d="M12 2.8l2.2 1.6 2.7-.2.8 2.6 2.2 1.6-.9 2.6.9 2.6-2.2 1.6-.8 2.6-2.7-.2L12 21.2l-2.2-1.6-2.7.2-.8-2.6-2.2-1.6.9-2.6-.9-2.6 2.2-1.6.8-2.6 2.7.2z" fill="currentColor" stroke="none"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8" stroke="var(--cell)" stroke-width="2"/>',
+    bulb: '<path d="M9 17.5h6M10 20.5h4M12 3.5a6 6 0 0 0-3.5 10.9c.6.5 1 1.3 1 2.1h5c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3.5z"/>',
+    snow: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5"/>',
+    coffee: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5c-.6.9-.6 1.9 0 2.8M11.5 3.5c-.6.9-.6 1.9 0 2.8"/>',
+    museum: '<path d="M3 9.5L12 4l9 5.5M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20.5h18"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    minus: '<path d="M5 12h14"/>',
+    list: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.8" cy="6.5" r="1"/><circle cx="4.8" cy="12" r="1"/><circle cx="4.8" cy="17.5" r="1"/>',
+    globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.5 3.5 5.5 3.5 8.5s-1 6-3.5 8.5c-2.5-2.5-3.5-5.5-3.5-8.5s1-6 3.5-8.5z"/>',
+    brain: '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.5A3 3 0 0 0 8 18.5a2.5 2.5 0 0 0 4 1V5a2.5 2.5 0 0 0-3-.5zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.5A3 3 0 0 1 16 18.5a2.5 2.5 0 0 1-4 1"/>',
+    scale: '<path d="M12 4v16M7 20h10M4 8h16M6.5 8l-3 6a3 3 0 0 0 6 0zM17.5 8l-3 6a3 3 0 0 0 6 0z"/>',
+    shield: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>'
   };
   function icon(name, cls) {
     const body = ICONS[name] || ICONS.info;
@@ -131,8 +154,10 @@
   const params = new URLSearchParams(window.location.search);
   const state = {
     lang: 'ru',
-    origin: null,          // {lat, lon, source: geo|map|landmark|sample, acc?, lm?} — memory only
+    theme: 'auto',         // auto | light | dark (auto follows the system)
+    origin: null,          // {lat, lon, source: geo|map|landmark|search|sample, acc?, lm?, label?} — memory only
     cell: null,            // geohash-7 — the only location the server ever gets
+    where: null,           // 2GIS address of the cell («Вы здесь»)
     chips: {time: null, kids: false, wheel: false, group: 1, interests: []},
     noAi: false,
     sim: {on: false, dt: '', temp: -5, wind: 15, precip: false},
@@ -145,11 +170,16 @@
     feedback: {},
     activeIdx: -1,
     sessionId: null,
-    traceOpen: false,
     deleteMsgKey: null,
     originMsgKey: null,
     formMsgKey: null,
-    collapsed: false
+    statusText: '',
+    view: 'form',          // form | results
+    panel: null,           // the second column: {kind: detail|trace|settings|about|from, idx?}
+    detent: 'medium',      // phone sheet: small | medium | large
+    pickMode: false,       // the next tap on the map sets the start
+    fromQuery: '',
+    fromItems: null
   };
 
   /* ------------------------------------------------------------ i18n */
@@ -311,26 +341,44 @@
     return state.sessionId;
   }
 
+  /* ------------------------------------------------------------ theme (auto follows the system) */
+  function themeNow() { return state.theme === 'auto' ? (darkMQ.matches ? 'dark' : 'light') : state.theme; }
+  function applyTheme() {
+    const th = themeNow();
+    document.documentElement.dataset.theme = th;
+    const b = $('#btn-theme');
+    if (b) {
+      b.innerHTML = icon(th === 'dark' ? 'sun' : 'moon');
+      b.setAttribute('aria-label', t('appearance') + ': ' + t(th === 'dark' ? 'theme_light' : 'theme_dark'));
+    }
+    if (map) {
+      const want = th === 'dark' ? STYLE_DARK : STYLE_LIGHT;
+      if (map.__style !== want) { map.__style = want; map.setStyle(want, {diff: false}); }
+    }
+    renderMarkers();
+  }
+
   /* ------------------------------------------------------------ static UI */
+  const SPOKES = Array.from({length: 8}, (_, i) => '<line x1="12" y1="2.5" x2="12" y2="7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="' +
+    (0.25 + i * 0.1).toFixed(2) + '" transform="rotate(' + (i * 45) + ' 12 12)"/>').join('');
+  const spinner = () => '<svg class="ic spinner" viewBox="0 0 24 24" aria-hidden="true">' + SPOKES + '</svg>';
+  const tile = (name, color) => '<span class="tile" style="background:' + color + '">' + icon(name) + '</span>';
+  const cap1 = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+  const QUICK_COLORS = {child: 'var(--orange)', coffee: 'var(--brown)', museum: 'var(--indigo)', tree: 'var(--tint)', moon: 'var(--purple)', plane: 'var(--blue)'};
+
   function buildStaticUI() {
     $$('[data-icon]').forEach((el) => {
       el.innerHTML = icon(el.getAttribute('data-icon'));
       el.classList.add('icw');
     });
-    $('#time-chips').innerHTML = TIME_OPTIONS.map((m) =>
-      '<button type="button" class="chip" data-time="' + m + '" aria-pressed="false"></button>').join('');
-    $('#group-seg').innerHTML = GROUP_OPTIONS.map((n) =>
-      '<button type="button" class="seg-btn" data-group="' + n + '" aria-pressed="false">' + n + '</button>').join('');
-    $('#interest-chips').innerHTML = INTERESTS.map((x) =>
-      '<button type="button" class="chip" data-interest="' + x.id + '" aria-pressed="false"></button>').join('');
-    // collapsed request summary (shown after "Подобрать")
-    const sum = document.createElement('div');
-    sum.className = 'req-summary';
-    sum.id = 'req-summary';
-    sum.hidden = true;
-    sum.innerHTML = '<div class="rs-text" id="rs-text"></div>' +
-      '<button type="button" class="btn btn-soft" id="btn-edit">' + icon('edit') + '<span id="btn-edit-text"></span></button>';
-    $('#req-form').before(sum);
+    $('#btn-go .spinner').innerHTML = SPOKES;
+    $('#time-seg').innerHTML = TIME_OPTIONS.map((m) => '<button type="button" data-time="' + m + '" aria-pressed="false"></button>').join('');
+    $('#group-seg').innerHTML = GROUP_OPTIONS.map((n) => '<button type="button" data-group="' + n + '" aria-pressed="false">' + n + '</button>').join('');
+    $('#interest-caps').innerHTML = INTERESTS.map((x) => '<button type="button" class="cap" data-interest="' + x.id + '" aria-pressed="false"></button>').join('');
+    $('#btn-zin').innerHTML = icon('plus');
+    $('#btn-zout').innerHTML = icon('minus');
+    $('#btn-locate-top').innerHTML = icon('loc');
+    $('#btn-locate-desk').innerHTML = icon('loc');
   }
 
   function applyLang() {
@@ -345,47 +393,39 @@
         if (attr && key) el.setAttribute(attr.trim(), t(key.trim()));
       });
     });
-    $$('.lang-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === state.lang)));
-    $$('#time-chips .chip').forEach((b) => { b.textContent = b.dataset.time + ' ' + t('min'); });
-    $$('#interest-chips .chip').forEach((b) => {
+    $$('#time-seg [data-time]').forEach((b) => { b.textContent = b.dataset.time + ' ' + t('min'); });
+    $$('#interest-caps [data-interest]').forEach((b) => {
       const def = INTERESTS.find((x) => x.id === b.dataset.interest);
       b.textContent = t(def.key);
     });
-    $('#examples').innerHTML = '<span class="ex-label">' + esc(t('examples_label')) + '</span>' +
-      t('examples').map((ex) => '<button type="button" class="ex-btn">' + esc(ex) + '</button>').join('');
-    $('#btn-edit-text').textContent = t('edit_request');
+    $('#quick').innerHTML = t('quick').map((q, k) => '<button type="button" class="qb" data-quick="' + k + '"><i style="background:' +
+      (QUICK_COLORS[q[0]] || 'var(--tint)') + '">' + icon(q[0]) + '</i>' + esc(q[1]) + '</button>').join('');
     $('#mock-lang').hidden = state.lang === 'ru';
-    $('#sim-note').textContent = state.mock ? t('sim_note_mock') : t('sim_note');
+    $('#btn-zin').setAttribute('aria-label', t('zoom_in'));
+    $('#btn-zout').setAttribute('aria-label', t('zoom_out'));
+    ['#btn-locate-top', '#btn-locate-desk'].forEach((s) => $(s).setAttribute('aria-label', t('my_location')));
     placeholderTick(true);
-    renderLandmarkOptions();
     renderOrigin();
     syncChipsUI();
-    syncSimUI();
-    renderAbout();
     renderMsgs();
     setBusy(state.busy);
-    renderSummary();
+    applyTheme();
     if (state.res) renderAll(false);
+    $('#panel2').dataset.kind = '';   // re-render the open page in the new language
+    renderPanel();
   }
 
-  /* Rotating placeholder with examples in the current language. */
+  /* Rotating placeholder: the short hint first, then examples in the current language. */
   let phIdx = 0;
   function placeholderTick(reset) {
     const q = $('#q');
-    const list = t('placeholders');
+    const list = [t('search_ph')].concat(t('placeholders'));
     if (reset) phIdx = 0;
     else if (document.activeElement === q || q.value) return;
     else phIdx = (phIdx + 1) % list.length;
-    q.placeholder = '«' + list[phIdx] + '»';
+    q.placeholder = list[phIdx];
   }
 
-  function renderLandmarkOptions() {
-    const sel = $('#landmark');
-    const cur = state.origin && state.origin.source === 'landmark' ? String(state.origin.lm) : '';
-    sel.innerHTML = '<option value="">' + esc(t('landmark_placeholder')) + '</option>' +
-      state.landmarks.map((l, i) => '<option value="' + i + '">' + esc(lmName(l)) + '</option>').join('');
-    sel.value = cur;
-  }
   function lmName(l) {
     const n = l.names || {};
     return n[state.lang] || n.ru || n.en || n.kk || l.id || '?';
@@ -393,48 +433,40 @@
 
   function syncChipsUI() {
     const c = state.chips;
-    $$('#time-chips .chip').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.time === c.time)));
-    $$('#group-seg .seg-btn').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.group === c.group)));
-    $$('#interest-chips .chip').forEach((b) => b.setAttribute('aria-pressed', String(c.interests.includes(b.dataset.interest))));
-    $('#chip-kids').setAttribute('aria-pressed', String(c.kids));
-    $('#chip-wheel').setAttribute('aria-pressed', String(c.wheel));
-    $('#noai').checked = state.noAi;
+    $$('#time-seg [data-time]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.time === c.time)));
+    $$('#group-seg [data-group]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.group === c.group)));
+    $$('#interest-caps [data-interest]').forEach((b) => b.setAttribute('aria-pressed', String(c.interests.includes(b.dataset.interest))));
+    $('#sw-kids').setAttribute('aria-checked', String(c.kids));
+    $('#sw-wheel').setAttribute('aria-checked', String(c.wheel));
+    const na = $('#sw-noai');
+    if (na) na.setAttribute('aria-checked', String(state.noAi));
   }
 
   function syncSimUI() {
     const s = state.sim;
-    $('#sim-on').checked = s.on;
+    if (!$('#sim-on')) return;   // the controls live in the settings page
+    $('#sim-on').setAttribute('aria-checked', String(s.on));
     $('#sim-dt').value = s.dt;
     $('#sim-temp').value = s.temp;
     $('#sim-wind').value = s.wind;
-    $('#sim-precip').checked = s.precip;
+    $('#sim-precip').setAttribute('aria-checked', String(s.precip));
     $('#sim-temp-out').textContent = fmtTemp(s.temp);
-    $('#sim-wind-out').textContent = s.wind + ' ' + t('kmh');
-    $('#sim').classList.toggle('is-on', s.on);
+    $('#sim-wind-out').textContent = s.wind + ' ' + t('kmh');
   }
 
   function renderMsgs() {
     setMsg('#origin-msg', state.originMsgKey);
+    setMsg('#origin-msg-p', state.originMsgKey);
     setMsg('#form-msg', state.formMsgKey);
     setMsg('#delete-msg', state.deleteMsgKey);
   }
   function setMsg(sel, entry) {
     const el = $(sel);
-    if (!entry) { el.textContent = ''; el.className = 'form-msg' + (sel === '#delete-msg' ? ' ok' : ''); return; }
+    if (!el) return;
+    if (!entry) { el.innerHTML = ''; el.className = 'form-msg'; return; }
     el.className = 'form-msg ' + (entry.tone || '');
-    el.innerHTML = icon(entry.tone === 'ok' ? 'check' : entry.tone === 'warn' ? 'alert' : 'info') + '<span>' + esc(t(entry.key)) +
-      (entry.help && entry.help.length ? '<ol class="geo-help">' + entry.help.map((h) => '<li>' + esc(h) + '</li>').join('') + '</ol>' : '') + '</span>';
-  }
-
-  /* ------------------------------------------------------------ about dialog */
-  function renderAbout() {
-    const secs = t('about_sections');
-    const rows = t('src_rows');
-    $('#about-body').innerHTML = secs.map((s) =>
-      '<section class="about-sec"><h3>' + esc(s.h) + '</h3><ul>' + s.items.map((i) => '<li>' + esc(i) + '</li>').join('') + '</ul></section>').join('') +
-      '<section class="about-sec"><h3>' + esc(t('about_sources')) + '</h3><div class="src-table" role="table">' +
-      rows.map((r) => '<div class="src-row" role="row"><span role="cell" class="src-name">' + esc(r[0]) + '</span><span role="cell" class="src-lic">' + esc(r[1]) + '</span><span role="cell" class="src-use">' + esc(r[2]) + '</span></div>').join('') +
-      '</div><p class="hint">' + esc(t('about_map')) + '</p></section>';
+    el.innerHTML = icon(entry.tone === 'ok' ? 'check' : entry.tone === 'warn' ? 'alert' : 'info') + '<div>' + esc(t(entry.key)) +
+      (entry.help && entry.help.length ? '<ol class="geo-help">' + entry.help.map((h) => '<li>' + esc(h) + '</li>').join('') + '</ol>' : '') + '</div>';
   }
 
   /* ------------------------------------------------------------ origin */
@@ -443,15 +475,18 @@
     state.origin = o;
     state.cell = geohashEncode(o.lat, o.lon, 7);
     state.originMsgKey = null;
+    state.pickMode = false;
     if (state.formMsgKey && state.formMsgKey.key === 'need_origin') state.formMsgKey = null;
     renderMsgs();
     state.where = null;
     renderOrigin();
     fetchWhere();
     updateOriginOnMap(options.fly !== false);
+    hideMapNote();
     // distances are recomputed locally from the new exact point
     if (state.res && state.res.cards) renderCards(false);
-    renderSummary();
+    if (state.panel && state.panel.kind === 'from') closePanel(true);
+    else renderPanel();
   }
 
   // «Вы здесь»: 2GIS address of the privacy cell (the exact point never leaves the browser)
@@ -468,42 +503,54 @@
     } catch (e) { /* no address — fine */ }
   }
 
-  // «Откуда?»: 2GIS suggestions for a typed place or address
+  // «Откуда?»: 2GIS suggestions for a typed place or address (a page in the second column)
   let sugTimer = null, sugSeq = 0;
-  function initFromSearch() {
-    const inp = $('#from-q'), list = $('#from-list');
-    if (!inp || !list) return;
-    const close = () => { list.hidden = true; list.innerHTML = ''; inp.setAttribute('aria-expanded', 'false'); };
-    inp.addEventListener('input', () => {
-      clearTimeout(sugTimer);
-      const q = inp.value.trim();
-      if (q.length < 2 || state.mock) { close(); return; }
-      sugTimer = setTimeout(async () => {
-        const seq = ++sugSeq;
-        try {
-          const r = await fetch('/api/suggest?q=' + encodeURIComponent(q) + '&cell=' + encodeURIComponent(state.cell || ''), {headers: {Accept: 'application/json'}});
-          const j = r.ok ? await r.json() : {items: []};
-          if (seq !== sugSeq) return;
-          const items = (j && j.items) || [];
-          if (!items.length) { list.innerHTML = '<li class="from-empty">' + esc(t('from_none')) + '</li>'; list.hidden = false; return; }
-          list.innerHTML = items.map((it, i) => '<li role="option" tabindex="-1" data-i="' + i + '"><b>' + esc(it.name) + '</b><span>' + esc(it.subtitle || '') + '</span></li>').join('') +
-            '<li class="from-src" aria-hidden="true">2GIS</li>';
-          list.hidden = false;
-          inp.setAttribute('aria-expanded', 'true');
-          list.querySelectorAll('li[data-i]').forEach((li) => li.addEventListener('mousedown', (ev) => {
-            ev.preventDefault();
-            const it = items[+li.dataset.i];
-            inp.value = it.name;
-            close();
-            setOrigin({lat: it.lat, lon: it.lon, source: 'search', label: it.name});
-          }));
-        } catch (e) { close(); }
-      }, 250);
-    });
-    inp.addEventListener('blur', () => setTimeout(close, 150));
-    inp.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  function onFromInput(inp) {
+    clearTimeout(sugTimer);
+    const q = inp.value.trim();
+    state.fromQuery = inp.value;
+    const clr = $('#from-clear');
+    if (clr) clr.hidden = !inp.value;
+    if (q.length < 2 || state.mock) { state.fromItems = null; renderFromResults(); return; }
+    sugTimer = setTimeout(async () => {
+      const seq = ++sugSeq;
+      let items = [];
+      try {
+        const r = await fetch('/api/suggest?q=' + encodeURIComponent(q) + '&cell=' + encodeURIComponent(state.cell || ''), {headers: {Accept: 'application/json'}});
+        const j = r.ok ? await r.json() : {items: []};
+        items = (j && j.items) || [];
+      } catch (e) { items = []; }
+      if (seq !== sugSeq) return;
+      state.fromItems = items;
+      renderFromResults();
+    }, 250);
   }
-
+  function renderFromResults() {
+    const box = $('#from-results');
+    if (!box) return;
+    const items = state.fromItems;
+    if (!items) { box.innerHTML = ''; return; }
+    box.innerHTML = '<section class="sec"><div class="sec-h"><h3>' + esc(t('suggest_title')) + '</h3></div><div class="list tiles">' +
+      (items.length ? items.map((it, i) => '<button type="button" class="row" data-sug="' + i + '">' + tile('pinf', 'var(--red)') +
+        '<span class="t">' + esc(it.name) + '<span class="s">' + esc(it.subtitle || '') + '</span></span><span class="chev">' + icon('chevR') + '</span></button>').join('')
+        : '<div class="row noicon"><span class="t" style="color:var(--label-2)">' + esc(t('from_none')) + '</span><span></span></div>') +
+      '</div><p class="sec-f">' + esc(t('suggest_note')) + '</p></section>';
+  }
+  function fromHTML() {
+    const chev = '<span class="chev">' + icon('chevR') + '</span>';
+    return '<label class="search from-input">' + icon('search') + '<span class="sr-only">' + esc(t('from_label')) + '</span>' +
+      '<input id="from-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="' + esc(t('from_ph')) + '" value="' + esc(state.fromQuery) + '">' +
+      '<button type="button" class="clear" id="from-clear" aria-label="' + esc(t('close_btn')) + '"' + (state.fromQuery ? '' : ' hidden') + '>' + icon('xfill') + '</button></label>' +
+      '<div class="list tiles">' +
+      '<button type="button" class="row" data-act="locate">' + tile('loc', 'var(--blue)') + '<span class="t">' + esc(t('my_location')) + '<span class="s">' + esc(t('my_location_sub')) + '</span></span>' + chev + '</button>' +
+      '<button type="button" class="row" data-act="pick">' + tile('map', 'var(--tint)') + '<span class="t">' + esc(t('pick_on_map')) + '<span class="s">' + esc(t('pick_on_map_sub')) + '</span></span>' + chev + '</button></div>' +
+      '<div class="form-msg" id="origin-msg-p" role="status"></div>' +
+      '<div id="from-results"></div>' +
+      '<section class="sec"><div class="sec-h"><h3>' + esc(t('landmarks_title')) + '</h3></div><div class="list tiles">' +
+      state.landmarks.map((l, i) => '<button type="button" class="row" data-lm="' + i + '">' + tile('landmark', 'var(--indigo)') + '<span class="t">' + esc(lmName(l)) + '</span>' + chev + '</button>').join('') +
+      '</div></section>';
+  }
+  function locateButtons() { return $$('#btn-locate, #btn-locate-top, #btn-locate-desk, #panel2 [data-act="locate"]'); }
   function originText() {
     const o = state.origin;
     if (!o) return t('origin_none');
@@ -524,22 +571,27 @@
   }
 
   function renderOrigin() {
-    const o = state.origin;
-    const st = $('#origin-status');
-    const ic = !o ? 'target' : o.source === 'geo' ? 'locate' : o.source === 'landmark' ? 'landmark' : 'pin';
-    st.className = 'origin-status' + (o ? ' is-set' : '');
-    const w = state.where;
-    st.innerHTML = icon(ic) + '<span>' + esc(originText()) +
-      (w && w.address ? '<span class="where">' + esc(t('where_prefix')) + ' ' + esc([w.address, w.building].filter(Boolean).join(' · ')) +
-        '<small> · 2GIS</small></span>' : '') + '</span>';
+    const o = state.origin, w = state.where;
+    const line = $('#where-line');
+    const u = (UNITS[state.lang] || UNITS.ru)[0];
+    if (!o) {
+      line.className = 'where none';
+      line.innerHTML = '';   // the «Откуда идём» section right below already asks for the start
+    } else {
+      const place = w && w.address ? [w.building, w.address].filter(Boolean).join(', ') : originShort();
+      line.className = 'where';
+      line.innerHTML = icon('loc') + '<span class="wt">' + esc(t('you_are_here')) + ': <b>' + esc(place) + '</b>' +
+        (w && w.address ? ' <small>· 2GIS</small>' : '') +
+        (o.source === 'geo' && o.acc ? ' <small>±' + Math.max(1, Math.round(o.acc)) + ' ' + u + '</small>' : '') + '</span>' +
+        '<button type="button" class="textbtn" data-act="from">' + esc(t('change_btn')) + '</button>';
+    }
+    $('#origin-sec').hidden = !!o;
     $('#cell-code').innerHTML = state.cell ? ' · ' + esc(t('cell_label')) + ' <code>' + esc(state.cell) + '</code>' : '';
-    const sel = $('#landmark');
-    sel.value = o && o.source === 'landmark' ? String(o.lm) : '';
     renderMapChip();
   }
 
   function locate() {
-    const btn = $('#btn-locate');
+    const btns = locateButtons();
     if (!window.isSecureContext || !navigator.geolocation) {
       state.originMsgKey = {key: 'geo_insecure', tone: 'warn'};
       renderMsgs();
@@ -547,16 +599,14 @@
     }
     state.originMsgKey = {key: 'geo_locating', tone: 'info'};
     renderMsgs();
-    btn.setAttribute('aria-busy', 'true');
-    btn.classList.add('is-loading');
+    btns.forEach((b) => { b.setAttribute('aria-busy', 'true'); b.classList.add('is-loading'); });
     // remember the permission state before asking: "denied" here = the site is blocked in the browser;
     // a refusal while the state is "prompt"/"granted" = location is switched off for the browser in the OS
     let permBefore = 'unknown';
     let retried = false;
     const ask = (opts) => navigator.geolocation.getCurrentPosition(onPos, onErr, opts);
     const onPos = (pos) => {
-      btn.removeAttribute('aria-busy');
-      btn.classList.remove('is-loading');
+      btns.forEach((b) => { b.removeAttribute('aria-busy'); b.classList.remove('is-loading'); });
       const c = pos.coords;
       setOrigin({lat: c.latitude, lon: c.longitude, source: 'geo', acc: c.accuracy});
       if (!inAstana(c.latitude, c.longitude)) {   // never block: the search widens step by step and 2GIS covers the outskirts
@@ -571,8 +621,7 @@
         ask({enableHighAccuracy: false, timeout: 10000, maximumAge: 300000});
         return;
       }
-      btn.removeAttribute('aria-busy');
-      btn.classList.remove('is-loading');
+      btns.forEach((b) => { b.removeAttribute('aria-busy'); b.classList.remove('is-loading'); });
       if (code === 1) {
         const where = permBefore === 'denied' ? 'site' : 'os';
         state.originMsgKey = {key: where === 'site' ? 'geo_blocked_site' : 'geo_blocked_os', tone: 'warn', help: geoHelp(where)};
@@ -627,7 +676,7 @@
         const idx = list.findIndex((l) => l.id === keep.id);
         if (idx >= 0) state.origin.lm = idx; else state.origin.source = 'map';
       }
-      renderLandmarkOptions();
+      if (state.panel && state.panel.kind === 'from') { $('#panel2').dataset.kind = ''; renderPanel(); }
       renderOrigin();
     } catch (e) { /* keep the built-in list */ }
   }
@@ -650,10 +699,11 @@
 
   function initMap() {
     if (!window.maplibregl) { mapUnavailable(); return; }
+    const style = themeNow() === 'dark' ? STYLE_DARK : STYLE_LIGHT;
     try {
       map = new window.maplibregl.Map({
         container: 'map',
-        style: darkMQ.matches ? STYLE_DARK : STYLE_LIGHT,
+        style: style,
         center: [ASTANA.lon, ASTANA.lat],
         zoom: mobileMQ.matches ? 11.2 : 11.8,
         minZoom: 9,
@@ -663,22 +713,61 @@
         pitchWithRotate: false,
         maxBounds: [[70.85, 50.82], [72.05, 51.45]]
       });
+      map.__style = style;
     } catch (e) { mapUnavailable(); return; }
-    map.addControl(new window.maplibregl.NavigationControl({showCompass: false}), 'top-right');
     map.touchZoomRotate.disableRotation();
-    map.on('style.load', () => { ensureLayers(); syncMapData(); });
+    map.on('style.load', () => { paint2gis(themeNow() === 'dark'); ensureLayers(); syncMapData(); });
     map.on('click', onMapClick);
+    map.on('zoomend', declutter);
     map.on('error', () => { /* tile hiccups are not user-facing; keep the console clean */ });
     // the dark OpenFreeMap style references a sprite pattern it does not ship; give it a transparent pixel
     map.on('styleimagemissing', (e) => {
       if (e && e.id && !map.hasImage(e.id)) map.addImage(e.id, {width: 1, height: 1, data: new Uint8Array(4)});
     });
-    const onScheme = () => { if (map) map.setStyle(darkMQ.matches ? STYLE_DARK : STYLE_LIGHT, {diff: false}); };
-    if (darkMQ.addEventListener) darkMQ.addEventListener('change', onScheme);
   }
   function mapUnavailable() {
-    $('#mapwrap').classList.add('no-map');
+    document.body.classList.add('no-map');
     showMapNote('map_unavailable', 0);
+  }
+
+  // recolour OpenFreeMap towards the 2GIS palette: beige land, green parks, yellow arterials; blue-grey at night
+  function paint2gis(dark) {
+    const set = (id, prop, v) => { try { if (map.getLayer(id)) map.setPaintProperty(id, prop, v); } catch (e) { /* layer differs between styles */ } };
+    const hide = (id) => { try { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none'); } catch (e) { /* ignore */ } };
+    if (!dark) {
+      set('background', 'background-color', '#F6F2DE');
+      ['park', 'landcover_grass'].forEach((id) => set(id, 'fill-color', '#D3E8B7'));
+      set('landcover_wood', 'fill-color', '#C6E1A6');
+      set('park_outline', 'line-color', '#C3DCA2');
+      set('landuse_residential', 'fill-color', '#F2EDD8');
+      set('water', 'fill-color', '#A9D3F5');
+      ['waterway_river', 'waterway_other', 'waterway_tunnel'].forEach((id) => set(id, 'line-color', '#A9D3F5'));
+      set('building', 'fill-color', '#E7E1CE');
+      set('building', 'fill-outline-color', '#D8D0B8');
+      ['road_minor', 'road_service_track', 'bridge_street', 'road_path_pedestrian', 'road_secondary_tertiary', 'road_link', 'bridge_secondary_tertiary', 'bridge_link']
+        .forEach((id) => set(id, 'line-color', '#FFFFFF'));
+      ['road_trunk_primary', 'bridge_trunk_primary'].forEach((id) => set(id, 'line-color', '#FFE9A6'));
+      ['road_motorway', 'bridge_motorway', 'road_motorway_link'].forEach((id) => set(id, 'line-color', '#FFD27A'));
+      ['road_minor_casing', 'road_service_track_casing', 'road_secondary_tertiary_casing', 'road_link_casing', 'road_trunk_primary_casing', 'road_motorway_casing']
+        .forEach((id) => set(id, 'line-color', '#E2D9BF'));
+      ['poi_r1', 'poi_r7', 'poi_r20', 'building-3d'].forEach(hide);
+    } else {
+      set('background', 'background-color', '#1B1F24');
+      set('water', 'fill-color', '#15283B');
+      set('waterway', 'line-color', '#15283B');
+      ['landcover_wood', 'landuse_park'].forEach((id) => set(id, 'fill-color', '#1D2E23'));
+      set('landuse_residential', 'fill-color', '#1E2227');
+      set('building', 'fill-color', '#292E35');
+      ['highway_minor', 'highway_path'].forEach((id) => set(id, 'line-color', '#2C3139'));
+      ['highway_major_inner', 'highway_major_subtle'].forEach((id) => set(id, 'line-color', '#3A4049'));
+      ['highway_major_casing', 'highway_motorway_casing'].forEach((id) => set(id, 'line-color', '#2C3139'));
+      set('highway_motorway_inner', 'line-color', '#4A4434');
+      set('highway_motorway_subtle', 'line-color', '#3A3A33');
+      ['highway_name_other', 'highway_name_motorway', 'place_other', 'place_suburb', 'place_village', 'place_town', 'place_city', 'place_city_large'].forEach((id) => {
+        set(id, 'text-color', '#9AA2AC');
+        set(id, 'text-halo-color', '#1B1F24');
+      });
+    }
   }
 
   function cssVar(name, fallback) {
@@ -687,9 +776,9 @@
   }
   function ensureLayers() {
     if (!map) return;
-    const route = cssVar('--route', '#0B6BA0');
+    const route = cssVar('--route', '#0073FA');
     const casing = cssVar('--route-casing', '#ffffff');
-    const cell = cssVar('--cell', route);
+    const cell = cssVar('--cell-color', route);
     // draw above every road/building layer but below the labels that come after them
     const layers = (map.getStyle() && map.getStyle().layers) || [];
     let lastGeom = -1;
@@ -699,12 +788,12 @@
     if (!map.getSource('cell')) map.addSource('cell', {type: 'geojson', data: EMPTY_FC});
     if (!map.getSource('route')) map.addSource('route', {type: 'geojson', data: EMPTY_FC});
     const add = (layer) => { if (!map.getLayer(layer.id)) map.addLayer(layer, before); };
-    add({id: 'cell-fill', type: 'fill', source: 'cell', paint: {'fill-color': cell, 'fill-opacity': 0.14}});
-    add({id: 'cell-line', type: 'line', source: 'cell', paint: {'line-color': cell, 'line-width': 1.6, 'line-dasharray': [2, 1.5]}});
+    add({id: 'cell-fill', type: 'fill', source: 'cell', paint: {'fill-color': cell, 'fill-opacity': themeNow() === 'dark' ? 0.14 : 0.08}});
+    add({id: 'cell-line', type: 'line', source: 'cell', paint: {'line-color': cell, 'line-width': 1.5, 'line-dasharray': [2, 2]}});
     add({id: 'route-casing', type: 'line', source: 'route', layout: {'line-cap': 'round', 'line-join': 'round'},
-      paint: {'line-color': casing, 'line-width': 9, 'line-opacity': 0.92}});
+      paint: {'line-color': casing, 'line-width': 9, 'line-opacity': 0.95}});
     add({id: 'route-solid', type: 'line', source: 'route', filter: ['!=', ['get', 'approx'], true],
-      layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': route, 'line-width': 4.5}});
+      layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': route, 'line-width': 5}});
     add({id: 'route-dashed', type: 'line', source: 'route', filter: ['==', ['get', 'approx'], true],
       layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': route, 'line-width': 4, 'line-dasharray': [0.8, 1.8]}});
   }
@@ -743,13 +832,15 @@
 
   function onMapClick(e) {
     const target = e.originalEvent && e.originalEvent.target;
-    if (target && target.closest && target.closest('.poi-marker, .origin-marker')) return;
+    if (target && target.closest && target.closest('.pin-wrap, .origin-marker')) return;
+    // the map is the whole screen: a tap sets the start only when asked to (or while there is none)
+    if (!state.pickMode && state.origin) return;
     const lat = e.lngLat.lat, lon = e.lngLat.lng;
     if (!inAstana(lat, lon)) { showMapNote('map_outside', 3500); return; }
     hideMapNote();
     setOrigin({lat: lat, lon: lon, source: 'map'}, {fly: false});
+    if (mobileMQ.matches && state.detent === 'small') setDetent('medium');
   }
-
   function updateOriginOnMap(fly) {
     if (!map || !state.origin) {
       if (originMarker && !state.origin) { originMarker.remove(); originMarker = null; }
@@ -777,18 +868,18 @@
     }
     originMarker.getElement().setAttribute('aria-label', t('start') + ': ' + (originShort() || originText()));
     syncMapData();
-    if (fly) map.easeTo({center: ll, zoom: Math.max(map.getZoom(), 14), duration: motionOK() ? 700 : 0});
+    if (fly) map.easeTo({center: ll, zoom: Math.max(map.getZoom(), 14), offset: freeOffset(), duration: motionOK() ? 700 : 0});
   }
 
   function renderMapChip() {
     const chip = $('#map-chip');
     if (!chip) return;
-    if (!state.origin) {
-      chip.className = 'map-chip hint';
+    if (!state.origin || state.pickMode) {
+      chip.className = 'map-chip glass hint';
       chip.innerHTML = icon('pin') + '<span>' + esc(t('map_pick_hint')) + '</span>';
     } else {
-      chip.className = 'map-chip';
-      chip.innerHTML = icon('lock') + '<span>' + esc(t('map_cell_chip')) + ' · <code>' + esc(state.cell) + '</code></span>';
+      chip.className = 'map-chip glass';
+      chip.innerHTML = icon('lock') + '<span>' + esc(t('map_cell_chip')) + '<code> · ' + esc(state.cell) + '</code></span>';
     }
   }
 
@@ -801,7 +892,6 @@
     if (ms) noteTimer = setTimeout(hideMapNote, ms);
   }
   function hideMapNote() { $('#map-note').hidden = true; }
-
   /* Display order: route stops in route order, then single picks/events, then backups.
      Route stops and picks get numbers; alternatives get a "backup" badge and are not numbered. */
   function cardView() {
@@ -820,30 +910,83 @@
     r._view = {main: main, alts: alts, byIdx: byIdx};
     return r._view;
   }
-  function badgeHTML(v, cls) {
-    return v.num ? '<span class="num' + (cls ? ' ' + cls : '') + '" aria-hidden="true">' + v.num + '</span>'
-      : '<span class="num num-alt' + (cls ? ' ' + cls : '') + '" aria-hidden="true">' + icon('swap') + '</span>';
+  function badgeHTML(v, card) {
+    if (v.num) return '<span class="badge' + (card && card.kind === 'event' ? ' ev' : '') + '" aria-hidden="true">' + v.num + '</span>';
+    return '<span class="badge o" aria-hidden="true">' + icon(card && card.kind === 'event' ? 'calendar' : 'swap') + '</span>';
   }
 
   function renderMarkers() {
-    poiMarkers.forEach((m) => m.remove());
+    poiMarkers.forEach((m) => { if (m) m.remove(); });
     poiMarkers = [];
     const r = state.res;
     if (!map || !r || !r.cards) return;
     const view = cardView();
+    const green = cssVar('--tint', '#19AA1E'), purple = cssVar('--purple', '#AF52DE');
     r.cards.forEach((c, i) => {
       if (!isFinite(c.lat) || !isFinite(c.lon)) { poiMarkers.push(null); return; }
       const v = view.byIdx[i];
-      const el = document.createElement('button');
-      el.type = 'button';
-      el.className = 'poi-marker' + (c.kind === 'event' ? ' is-event' : '') + (v.alt ? ' is-alt' : '') + (i === state.activeIdx ? ' is-active' : '');
-      if (v.num) el.textContent = String(v.num); else el.innerHTML = icon('swap');
-      el.setAttribute('aria-label', (v.num ? v.num + '. ' : t('alt_title') + ': ') + c.name);
-      el.addEventListener('click', (ev) => { ev.stopPropagation(); selectCard(i, {scrollCard: true}); });
-      poiMarkers.push(new window.maplibregl.Marker({element: el}).setLngLat([c.lon, c.lat]).addTo(map));
+      const ev = c.kind === 'event';
+      const wrap = document.createElement('div');
+      wrap.className = 'pin-wrap ' + (v.alt ? 'alt' : 'main') + (ev ? ' is-event' : '') + (i === state.activeIdx ? ' is-active' : '');
+      wrap.tabIndex = 0;
+      wrap.setAttribute('role', 'button');
+      wrap.setAttribute('aria-label', (v.num ? v.num + '. ' : t('alt_title') + ': ') + c.name);
+      wrap.innerHTML = v.alt ? '<div class="pin-alt">' + icon(ev ? 'calendar' : 'swap') + '</div>'
+        : '<svg class="pin-main" viewBox="0 0 36 46" aria-hidden="true"><path d="M18 44.5S3 29.6 3 18.5a15 15 0 0 1 30 0C33 29.6 18 44.5 18 44.5z" fill="' + (ev ? purple : green) +
+          '" stroke="#fff" stroke-width="2.5"/><text x="18" y="23.5" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="15" font-weight="700" fill="#fff">' +
+          v.num + '</text></svg>';
+      const lab = document.createElement('span');
+      lab.className = 'pin-label';
+      lab.textContent = c.name.length > 24 ? c.name.slice(0, 23) + '…' : c.name;
+      wrap.appendChild(lab);
+      const go = (e) => { e.stopPropagation(); selectCard(i, {open: true, fly: true}); };
+      wrap.addEventListener('click', go);
+      wrap.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } });
+      const mk = new window.maplibregl.Marker({element: wrap, anchor: v.alt ? 'center' : 'bottom'}).setLngLat([c.lon, c.lat]).addTo(map);
+      mk.__kind = v.alt ? 'alt' : 'main';
+      poiMarkers.push(mk);
+    });
+    declutter();
+  }
+
+  // places in one building would sit on top of each other: a pin with its label is a box,
+  // alternatives move up or down until their box is free
+  function declutter() {
+    if (!map) return;
+    const H = map.getContainer().clientHeight - sheetPx();
+    const box = (m, dy) => {
+      const p = map.project(m.getLngLat());
+      const lab = m.getElement().querySelector('.pin-label');
+      const w = lab ? lab.offsetWidth + 6 : 0;
+      const kind = m.__kind || 'me';
+      const cy = (kind === 'main' ? p.y - 27 : p.y) + dy;
+      const r = kind === 'me' ? 22 : 17;
+      return {x1: p.x - r, x2: p.x + r + w, y1: cy - r, y2: cy + r};
+    };
+    const hit = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2;
+    const fixed = poiMarkers.filter((m) => m && m.__kind === 'main');
+    if (originMarker) fixed.push(originMarker);
+    const placed = fixed.map((m) => box(m, 0));
+    poiMarkers.filter((m) => m && m.__kind === 'alt').forEach((m) => {
+      const ok = (dy) => { const b = box(m, dy); return b.y1 > 56 && b.y2 < H - 12 && !placed.some((q) => hit(q, b)); };
+      const found = [0, -36, 36, -72, 72, -108, 108].find(ok);
+      const dy = found == null ? 0 : found;
+      m.setOffset([0, dy]);
+      placed.push(box(m, dy));
     });
   }
 
+  function sheetPx() { return mobileMQ.matches ? detentPx(state.detent) : 0; }
+  function mapPadding() {
+    if (mobileMQ.matches) return {top: 100, bottom: sheetPx() + 36, left: 36, right: 140};
+    return {top: 90, bottom: 70, left: 432 + (state.panel ? 392 : 0) + 40, right: 220};
+  }
+
+  // camera moves use an offset into the free part of the map: MapLibre keeps `padding` from easeTo and adds it to every later fit
+  function freeOffset() {
+    const p = mapPadding();
+    return [(p.left - p.right) / 2, (p.top - p.bottom) / 2];
+  }
   function fitToResults() {
     const r = state.res;
     if (!map || !r || !r.cards || !r.cards.length) return;
@@ -852,9 +995,9 @@
     if (!pts.length) return;
     const b = new window.maplibregl.LngLatBounds(pts[0], pts[0]);
     pts.forEach((p) => b.extend(p));
-    const small = mobileMQ.matches;
-    map.fitBounds(b, {padding: small ? {top: 60, bottom: 86, left: 34, right: 60} : {top: 80, bottom: 60, left: 70, right: 90},
-      maxZoom: 15.5, duration: motionOK() ? 900 : 0});
+    try {
+      map.fitBounds(b, {padding: mapPadding(), maxZoom: 16.2, duration: motionOK() ? 800 : 0});
+    } catch (e) { /* the padding is larger than the map on a tiny screen */ }
   }
 
   function renderMapResults(fit) {
@@ -869,16 +1012,15 @@
     $$('#cards .card').forEach((el) => el.classList.toggle('is-active', +el.dataset.idx === i));
     poiMarkers.forEach((m, j) => { if (m) m.getElement().classList.toggle('is-active', j === i); });
     const card = state.res && state.res.cards && state.res.cards[i];
-    if (o.fly && map && card) {
-      map.easeTo({center: [card.lon, card.lat], zoom: Math.max(map.getZoom(), 14.5), duration: motionOK() ? 700 : 0});
+    if (o.open) openPanel({kind: 'detail', idx: i});
+    if (o.fly && map && card && isFinite(card.lat) && isFinite(card.lon)) {
+      map.easeTo({center: [card.lon, card.lat], zoom: Math.max(map.getZoom(), 15), offset: freeOffset(), duration: motionOK() ? 700 : 0});
     }
-    if (o.showMap && mobileMQ.matches) window.scrollTo({top: 0, behavior: motionOK() ? 'smooth' : 'auto'});
     if (o.scrollCard) {
       const el = $('#card-' + i);
       if (el) el.scrollIntoView({block: 'nearest', behavior: motionOK() ? 'smooth' : 'auto'});
     }
   }
-
   /* ------------------------------------------------------------ request */
   function buildRequest() {
     const c = state.chips;
@@ -912,8 +1054,10 @@
     if (!state.origin) {
       state.formMsgKey = {key: 'need_origin', tone: 'warn'};
       renderMsgs();
-      expandForm();
-      $('#btn-locate').focus();
+      showView('form');
+      setDetent('medium');
+      const lb = $('#btn-locate');
+      if (lb && !$('#origin-sec').hidden) lb.focus();
       return;
     }
     state.formMsgKey = null;
@@ -1054,6 +1198,7 @@
         r._view = null;
         renderCards(true);
         renderRoute();
+        renderHead();
         renderMapResults(true);
         setStatus(r.cards.length ? t(r.noAi ? 'status_cards_tpl' : 'status_cards', {n: r.cards.length}) : '');
         break;
@@ -1109,40 +1254,21 @@
     btn.classList.toggle('is-busy', b);
     btn.setAttribute('aria-busy', String(b));
     $('#btn-go-text').textContent = b ? t('submitting') : t('submit');
-    $('#results').setAttribute('aria-busy', String(b));
+    $('#view-results').setAttribute('aria-busy', String(b));
+    renderStatus();
   }
-  function setStatus(text) { $('#status').textContent = text || ''; }
+  function setStatus(text) { state.statusText = text || ''; renderStatus(); }
+  function renderStatus() {
+    $('#status').innerHTML = (state.busy ? spinner() : '') + '<span>' + esc(state.statusText) + '</span>';
+  }
 
-  /* ------------------------------------------------------------ collapse / summary */
-  function collapseForm() {
-    state.collapsed = true;
-    $('#req-form').hidden = true;
-    $('#req-summary').hidden = false;
-    renderSummary();
-  }
-  function expandForm(focus) {
-    state.collapsed = false;
-    $('#req-form').hidden = false;
-    $('#req-summary').hidden = true;
-    if (focus) $('#q').focus();
-  }
-  function renderSummary() {
-    const el = $('#rs-text');
-    if (!el) return;
-    const c = state.chips;
-    const bits = [];
-    if (c.time) bits.push(c.time + ' ' + t('min'));
-    if (c.kids) bits.push(t('chip_kids').toLowerCase());
-    if (c.wheel) bits.push(t('chip_wheelchair').toLowerCase());
-    if (c.group > 1) bits.push(c.group + ' ' + icon('users', 'ic-inline'));
-    c.interests.forEach((id) => { const d = INTERESTS.find((x) => x.id === id); if (d) bits.push(t(d.key).toLowerCase()); });
-    if (state.noAi) bits.push(t('noai_label'));
-    if (state.sim.on) bits.push(t('simulated_tag'));
-    const q = $('#q').value.trim();
-    el.innerHTML =
-      (state.origin ? '<span class="rs-origin">' + icon('pin') + esc(originShort()) + '</span>' : '') +
-      (q ? '<span class="rs-q">«' + esc(q) + '»</span>' : '') +
-      (bits.length ? '<span class="rs-chips">' + bits.map((b) => (b.indexOf('<svg') >= 0 ? b : esc(b))).join(' · ') + '</span>' : '');
+  /* ------------------------------------------------------------ views: the request and the answer */
+  function showView(v) {
+    state.view = v;
+    $('#view-form').hidden = v !== 'form';
+    $('#view-results').hidden = v !== 'results';
+    $('#q-clear').hidden = !$('#q').value;
+    $('#sheet-body').scrollTop = 0;
   }
 
   /* ------------------------------------------------------------ results rendering */
@@ -1151,32 +1277,38 @@
       route: null, origin: null, texts: {}, trace: null, done: null, errorView: null, elapsed: null};
     state.feedback = {};
     state.activeIdx = -1;
+    closePanel(true);
     $('#mock-banner').hidden = !isMock;
-    $('#empty').hidden = true;
     ['#ctx', '#constraints', '#route', '#error', '#trace', '#done'].forEach((s) => { $(s).innerHTML = ''; });
-    $('#cards').innerHTML = '<ol class="cards">' + [0, 1, 2].map(skeletonCard).join('') + '</ol>';
+    $('#cards').innerHTML = skeletonHTML();
     setStatus(t('status_waiting'));
+    showView('results');
+    renderHead();
     renderMapResults(false);
-    collapseForm();
-    // bring the results into view: on phones the map stays on top, results right below it
-    const head = $('#results-title');
-    head.setAttribute('tabindex', '-1');
-    head.focus({preventScroll: true});
-    if (mobileMQ.matches) window.scrollTo({top: 0, behavior: motionOK() ? 'smooth' : 'auto'});
-    else $('#panel').scrollTo({top: 0, behavior: motionOK() ? 'smooth' : 'auto'});
+    if (mobileMQ.matches && state.detent !== 'medium') setDetent('medium');
+    $('#q').blur();
+    $('#results-title').focus({preventScroll: true});
   }
-
-  function skeletonCard(i) {
-    return '<li class="card skeleton" aria-hidden="true" style="--d:' + i + '">' +
-      '<div class="sk-row"><span class="sk sk-num"></span><span class="sk sk-title"></span></div>' +
-      '<span class="sk sk-line w80"></span><span class="sk sk-line w60"></span><span class="sk sk-line w90"></span></li>';
+  function skeletonHTML() {
+    const ph = (w, cls) => '<span class="ph' + (cls ? ' ' + cls : '') + '" style="width:' + w + '%"></span>';
+    return '<div class="view" aria-hidden="true"><div class="list"><div class="hero"><div class="hero-top"><span class="badge" style="background:var(--fill)"></span>' +
+      '<div class="ph-stack">' + ph(62, 't') + ph(36) + '</div><span></span></div><div class="ph-stack">' + ph(94) + ph(82) + ph(56) + '</div></div></div>' +
+      '<div class="list">' + [62, 48].map((w) => '<div class="row noicon"><span class="ph-stack">' + ph(w, 't') + ph(w + 22) + '</span><span></span></div>').join('') + '</div></div>';
+  }
+  function renderHead() {
+    const r = state.res;
+    const h = $('#results-title');
+    if (!r) { h.textContent = ''; return; }
+    const total = r.route && r.route.total_min;
+    const budget = r.constraints && r.constraints.time_budget_min;
+    h.textContent = !r.cards ? t('submitting') : total ? t('plan_title', {n: total}) : budget ? t('plan_title', {n: budget}) : t('plan_title_free');
   }
 
   function renderAll(animate) {
     const r = state.res;
     if (!r) return;
     $('#mock-banner').hidden = !r.mock;
-    $('#empty').hidden = true;
+    renderHead();
     renderContext();
     renderConstraints();
     renderRoute();
@@ -1199,33 +1331,29 @@
     const wd = weekdayIdx(c.local_time);
     const sunset = hhmm(c.sunset);
     const mode = ['walk', 'short', 'indoor'].includes(c.mode) ? c.mode : 'walk';
-    const modeIcon = {walk: 'walk', short: 'route', indoor: 'home'}[mode];
-    const items = [];
-    if (time) items.push('<span class="ctx-item ctx-time">' + icon('clock') + '<b>' + esc(time) + '</b>' + (wd != null ? '<span>' + esc(t('weekdays')[wd]) + '</span>' : '') + '</span>');
-    if (w.temp_c != null) {
-      items.push('<span class="ctx-item">' + icon('thermo') + '<b>' + fmtTemp(w.temp_c) + '</b>' +
-        (w.feels_c != null ? '<span>' + esc(t('feels', {t: fmtTemp(w.feels_c)})) + '</span>' : '') + '</span>');
-    }
-    if (w.wind_kmh != null) items.push('<span class="ctx-item">' + icon('wind') + '<span>' + esc(t('wind', {v: Math.round(w.wind_kmh)})) + '</span></span>');
-    if (w.precip_prob != null && (w.precip_prob > 1 ? w.precip_prob : w.precip_prob * 100) >= 30) {
-      const p = Math.round(w.precip_prob > 1 ? w.precip_prob : w.precip_prob * 100);
-      items.push('<span class="ctx-item">' + icon('alert') + '<span>' + esc(t('precip', {p: p})) + '</span></span>');
-    }
-    if (c.is_dark) items.push('<span class="ctx-item">' + icon('moon') + '<span>' + esc(t('dark')) + '</span></span>');
+    const cold = w.feels_c != null && w.feels_c < 0;
+    const head = w.temp_c != null ? fmtTemp(w.temp_c) + (w.feels_c != null ? ', ' + t('feels', {t: fmtTemp(w.feels_c)}) : '') : (time || '');
+    const sub = [];
+    if (wd != null) sub.push(t('weekdays')[wd]);
+    if (c.is_dark) sub.push(t('dark'));
     else if (sunset) {
       const soon = c.minutes_to_sunset != null && c.minutes_to_sunset >= 0 && c.minutes_to_sunset <= 180;
-      items.push('<span class="ctx-item">' + icon('sunset') + '<span>' + esc(t('sunset_at', {t: sunset})) +
-        (soon ? ' · ' + esc(t('sunset_in', {m: c.minutes_to_sunset})) : '') + '</span></span>');
+      sub.push(t('sunset_at', {t: sunset}) + (soon ? ' · ' + t('sunset_in', {m: c.minutes_to_sunset}) : ''));
     }
-    if (c.is_holiday) items.push('<span class="ctx-item ctx-holiday">' + icon('calendar') + '<span>' + esc(c.holiday_name || t('holiday')) + '</span></span>');
-    box.innerHTML =
-      '<section class="ctx' + (sim ? ' is-sim' : '') + '" aria-label="' + esc(t('weather_src')) + '">' +
-        (sim ? '<span class="tag tag-sim">' + icon('sliders') + esc(t('simulated_tag')) + '</span>' : '') +
-        '<div class="ctx-row">' + items.join('') + '</div>' +
-        '<div class="mode mode-' + mode + '"><span class="mode-chip">' + icon(modeIcon) + esc(t('mode_' + mode)) + '</span>' +
-          (c.mode_reason ? '<p class="mode-reason">' + esc(c.mode_reason) + '</p>' : '') + '</div>' +
-        '<p class="ctx-src">' + esc(t('weather_src')) + (w.desc ? ' · ' + esc(w.desc) : '') + '</p>' +
-      '</section>';
+    if (w.wind_kmh != null) sub.push(t('wind', {v: Math.round(w.wind_kmh)}));
+    if (w.precip_prob != null) {
+      const p = Math.round(w.precip_prob > 1 ? w.precip_prob : w.precip_prob * 100);
+      if (p >= 30) sub.push(t('precip', {p: p}));
+    }
+    if (c.is_holiday) sub.push(c.holiday_name || t('holiday'));
+    const wIcon = c.is_dark ? ['moon', 'var(--indigo)'] : cold ? ['snow', 'var(--teal)'] : ['sun', 'var(--orange)'];
+    const mIcon = {walk: ['walk', 'var(--tint)'], short: ['route', 'var(--orange)'], indoor: ['home', 'var(--red)']}[mode];
+    box.innerHTML = '<section class="sec" aria-label="' + esc(t('weather_src')) + '"><div class="list tiles">' +
+      '<div class="row">' + tile(wIcon[0], wIcon[1]) + '<span class="t">' + esc(head) + '<span class="s">' + esc(sub.join(' · ')) + '</span></span>' +
+        (time ? '<span class="tr num">' + esc(time) + '</span>' : '<span></span>') + '</div>' +
+      '<div class="row top">' + tile(mIcon[0], mIcon[1]) + '<span class="t"><b>' + esc(t('mode_' + mode)) + '</b>' +
+        (c.mode_reason ? '<span class="s">' + esc(c.mode_reason) + '</span>' : '') + '</span><span></span></div></div>' +
+      '<p class="sec-f">' + (sim ? '<span class="cap b">' + icon('sliders') + esc(t('simulated_tag')) + '</span> ' : '') + esc(t('weather_src')) + (w.desc ? ' · ' + esc(w.desc) : '') + '</p></section>';
   }
 
   function renderConstraints() {
@@ -1234,7 +1362,7 @@
     const box = $('#constraints');
     if (!c) { box.innerHTML = ''; return; }
     const bits = [];
-    if (c.time_budget_min) bits.push(c.time_budget_min + ' ' + t('min'));
+    if (c.time_budget_min) bits.push(c.time_budget_min + ' ' + t('min'));
     if (c.adults) bits.push(t('c_adults', {n: c.adults}));
     if (c.kids) bits.push(t('c_kids', {n: c.kids}));
     if (c.mobility) bits.push(t('mob_' + c.mobility));
@@ -1244,29 +1372,32 @@
     if (c.night) bits.push(t('c_night'));
     const wants = (c.wants || []).map(tagLabel);
     const avoid = (c.avoid || []).map(tagLabel);
-    box.innerHTML = '<div class="understood"><span class="u-label">' + esc(t('understood')) + ':</span> ' +
-      bits.map((b) => '<span class="u-chip">' + esc(b) + '</span>').join('') +
-      (wants.length ? '<span class="u-chip u-want">' + esc(t('c_wants')) + ': ' + esc(wants.join(', ')) + '</span>' : '') +
-      (avoid.length ? '<span class="u-chip u-avoid">' + esc(t('c_avoid')) + ': ' + esc(avoid.join(', ')) + '</span>' : '') +
-      '<span class="u-by">' + (c.parsed_by === 'llm' ? icon('sparkle') + esc(t('parsed_llm')) : icon('cpu') + esc(t('parsed_rules'))) + '</span>' +
-      '</div>';
+    box.innerHTML = '<section class="sec"><div class="sec-h"><h3>' + esc(t('understood')) + '</h3><span>' +
+      (c.parsed_by === 'llm' ? icon('sparkle') + ' ' + esc(t('parsed_llm')) : icon('cpu') + ' ' + esc(t('parsed_rules'))) + '</span></div>' +
+      '<div class="caps">' + bits.map((b) => '<span class="cap">' + esc(b) + '</span>').join('') +
+      (wants.length ? '<span class="cap g">' + esc(t('c_wants')) + ': ' + esc(wants.join(', ')) + '</span>' : '') +
+      (avoid.length ? '<span class="cap r">' + esc(t('c_avoid')) + ': ' + esc(avoid.join(', ')) + '</span>' : '') + '</div></section>';
+  }
+
+  function whereText() {
+    const w = state.where;
+    return w && w.address ? [w.building, w.address].filter(Boolean).join(', ') : originShort();
   }
 
   function renderRoute() {
     const r = state.res;
     const box = $('#route');
     const route = r && r.route;
-    const destKey = r && r.constraints && r.constraints.destination ? 'dest_' + r.constraints.destination : 'dest_other';
     const td = r && r.toDestObj;
-    const destLine = td && (td.taxi || td.transit)
-      ? '<div class="dest-block"><p class="dest-line">' + icon(destKey === 'dest_airport' ? 'plane' : 'arrow') + '<span>' +
-          esc(t('dest_then', {name: td.name || ''})) + (td.from ? ' · ' + esc(t('dest_from', {name: td.from})) : '') + '</span></p>' + movesHTML(td) + '</div>'
-      : r && r.toDest != null && isFinite(r.toDest)
-        ? '<p class="dest-line">' + icon(destKey === 'dest_airport' ? 'plane' : 'arrow') + '<span>' + esc(t(destKey, {n: Math.round(r.toDest)})) + '</span></p>' : '';
-    if (!route || !Array.isArray(route.stops) || !route.stops.length) {
-      box.innerHTML = destLine ? '<section class="route">' + destLine + '</section>' : '';
-      return;
+    const destKey = r && r.constraints && r.constraints.destination ? 'dest_' + r.constraints.destination : 'dest_other';
+    let dest = '';
+    if (td && (td.taxi || td.transit)) {
+      dest = '<section class="sec"><div class="sec-h"><h3>' + esc(t('dest_then', {name: td.name || ''})) + '</h3>' +
+        (td.from ? '<span>' + esc(t('dest_from', {name: td.from})) + '</span>' : '') + '</div>' + movesHTML(td) + '</section>';
+    } else if (r && r.toDest != null && isFinite(r.toDest)) {
+      dest = '<p class="prov" style="--pc:var(--blue)">' + icon(destKey === 'dest_airport' ? 'plane' : 'arrow') + '<span>' + esc(t(destKey, {n: Math.round(r.toDest)})) + '</span></p>';
     }
+    if (!route || !Array.isArray(route.stops) || !route.stops.length) { box.innerHTML = dest; return; }
     const view = cardView();
     const idxById = {};
     (r.cards || []).forEach((c, i) => { idxById[c.poi_id] = i; });
@@ -1274,45 +1405,40 @@
     (route.timeline || []).forEach((x) => { if (x && x.poi_id) tl[x.poi_id] = x; });
     const legs = route.legs || [];
     const startT = hhmm(r.context && r.context.local_time);
-    const parts = [];
-    parts.push('<li class="tl-step tl-start"><span class="tl-dot" aria-hidden="true"></span>' +
-      (startT ? '<time>' + esc(startT) + '</time>' : '') + '<span class="tl-name">' + esc(t('start')) + '</span></li>');
+    const rows = [];
+    rows.push('<div class="row"><span class="tm">' + esc(startT || '') + '</span><span class="dot"><i style="--c:var(--blue)"></i></span><span class="t">' + esc(t('start')) +
+      '<span class="s">' + esc(whereText()) + '</span></span><span></span></div>');
     let outdoor = 0;
     route.stops.forEach((id, k) => {
       const leg = legs[k];
       if (leg) outdoor += Number(leg.outdoor_min) || 0;
-      parts.push('<li class="tl-leg' + (leg && leg.approx ? ' is-approx' : '') + '" aria-label="' + esc(leg ? t('leg_walk', {n: leg.minutes}) : '') + '">' +
-        icon('arrow') + (leg ? '<span>' + esc(leg.minutes) + ' ' + esc(t('min')) + '</span>' : '') + '</li>');
       const i = idxById[id];
       const card = i != null ? r.cards[i] : null;
       const x = tl[id] || {};
       const arrive = hhmm(x.arrive), leave = hhmm(x.leave);
-      parts.push('<li class="tl-step"><button type="button" class="tl-btn" data-idx="' + (i != null ? i : '') + '">' +
-        (arrive ? '<time>' + esc(arrive) + '</time>' : '') +
-        (i != null ? badgeHTML(view.byIdx[i], 'num-sm') : '<span class="num num-sm" aria-hidden="true">•</span>') +
-        '<span class="tl-name">' + esc(card ? card.name : id) + '</span>' +
-        (leave ? '<span class="tl-until">' + esc(t('until', {t: leave})) + '</span>' : '') +
-        '</button></li>');
+      const v = i != null ? view.byIdx[i] : null;
+      rows.push('<button type="button" class="row' + (leg && leg.approx ? ' approx' : '') + '"' + (i != null ? ' data-idx="' + i + '" data-act="open"' : ' disabled') + '>' +
+        '<span class="tm">' + esc(arrive || '') + '</span><span class="dot"><b>' + (v && v.num ? v.num : '•') + '</b></span>' +
+        '<span class="t">' + esc(card ? card.name : id) + '<span class="s">' +
+        esc([leg ? t('leg_walk', {n: leg.minutes}) : '', leave ? t('until', {t: leave}) : ''].filter(Boolean).join(' · ')) + '</span></span>' +
+        '<span class="chev">' + icon('chevR') + '</span></button>');
     });
     const last = route.timeline && route.timeline.length ? hhmm(route.timeline[route.timeline.length - 1].leave) : null;
-    if (last) parts.push('<li class="tl-leg tl-leg-end" aria-hidden="true">' + icon('arrow') + '</li><li class="tl-step tl-end"><time>' + esc(last) + '</time><span class="tl-name">' + esc(t('finish')) + '</span></li>');
+    if (last) rows.push('<div class="row"><span class="tm">' + esc(last) + '</span><span class="dot"><i style="--c:var(--gray)"></i></span><span class="t">' + esc(cap1(t('finish'))) + '</span><span></span></div>');
     const anyApprox = legs.some((l) => l && l.approx);
-    box.innerHTML = '<section class="route" aria-labelledby="route-h">' +
-      '<div class="route-head"><h3 id="route-h">' + icon('route') + esc(t('route_title', {n: route.total_min})) + '</h3>' +
-      (outdoor ? '<span class="muted">' + esc(t('outdoor_total', {n: outdoor})) + '</span>' : '') +
-      (route.warm_stops ? '<span class="tag tag-warm">' + icon('flame') + esc(t('warm_stops')) + '</span>' : '') + '</div>' +
-      '<ol class="timeline">' + parts.join('') + '</ol>' +
-      destLine +
-      (anyApprox ? '<p class="hint route-hint"><span class="dash-sample" aria-hidden="true"></span>' + esc(t('approx_leg')) + '</p>' : '') +
-      '</section>';
+    box.innerHTML = '<section class="sec"><div class="sec-h"><h3>' + esc(t('route_title', {n: route.total_min})) + '</h3>' +
+      (outdoor ? '<span>' + esc(t('outdoor_total', {n: outdoor})) + '</span>' : '') + '</div>' +
+      '<div class="list itin">' + rows.join('') + '</div>' +
+      (route.warm_stops || anyApprox ? '<p class="sec-f">' + (route.warm_stops ? '<span class="cap o">' + icon('flame') + esc(t('warm_stops')) + '</span> ' : '') +
+        (anyApprox ? esc(t('approx_leg')) : '') + '</p>' : '') +
+      '</section>' + dest;
   }
 
-  function hoursHTML(h0) {
+  function hoursParts(h0) {
     const h = h0 || {status: 'unknown', level: 'unknown', label: ''};
     let level = h.level || 'unknown';
     if (h.status === 'open_area') level = 'open_area';
     if (!['high', 'medium', 'low', 'unknown', 'open_area'].includes(level)) level = 'unknown';
-    const ic = {high: 'shieldCheck', medium: 'info', low: 'alert', unknown: 'help', open_area: 'tree'}[level] || 'help';
     const label = String(h.label || '').trim();
     let main = '', note = '';
     if (level === 'open_area') {
@@ -1332,43 +1458,45 @@
         else if (h.status !== 'unknown') note = h.as_of ? t('hours_low', {d: fmtYear(h.as_of)}) : t('hours_low_nodate');
       }
     }
-    let status = '';
-    if (h.status === 'closes_soon') status = '<span class="tag tag-soon">' + icon('clock') + esc(t('closes_soon')) + '</span>';
-    else if (h.status === 'closed') status = '<span class="tag tag-closed">' + icon('xCircle') + esc(t('closed_now')) + '</span>';
-    const lvl = ['high', 'medium', 'low'].includes(level) ? '<span class="lvl-chip">' + esc(t('lvl_' + level)) + '</span>' : '';
-    return '<div class="hours lvl-' + level + '">' + '<span class="hours-ic">' + icon(ic) + '</span>' +
-      '<p><span class="hours-main">' + esc(main) + '</span>' + (note ? '<span class="hours-sep"> · </span><span class="hours-note">' + esc(note) + '</span>' : '') +
-      ' ' + lvl + status + '</p></div>';
+    return {h: h, level: level, main: main, note: note};
+  }
+  function hoursLine(h0) {
+    const p = hoursParts(h0);
+    const cls = p.h.status === 'closed' ? 'bad' : (p.level === 'high' || p.level === 'medium') ? 'ok' : p.level === 'open_area' ? '' : 'mid';
+    let s = '<div class="hline">' + (p.level === 'open_area' ? icon('tree') : '') + '<span class="' + cls + '">' + esc(p.main) + '</span>' +
+      (p.note ? '<span>· ' + esc(p.note) + '</span>' : '');
+    if (p.level === 'high' && p.h.status !== 'closed') s += '<span class="seal" title="' + esc(t('lvl_high')) + '">' + icon('seal') + '</span>';
+    if (p.h.status === 'closes_soon') s += '<span class="cap o">' + icon('clock') + esc(t('closes_soon')) + '</span>';
+    else if (p.h.status === 'closed') s += '<span class="cap r">' + icon('xCircle') + esc(t('closed_now')) + '</span>';
+    return s + '</div>';
   }
 
-  // taxi + public transport options from 2GIS (for far places and the way to the airport / station)
+  // taxi + public transport from 2GIS (for far places and the way to the airport / station)
   function movesHTML(m) {
     if (!m || (!m.taxi && !m.transit)) return '';
-    const rows = [];
+    const tiles = [];
+    const km = (UNITS[state.lang] || UNITS.ru)[1];
     if (m.taxi) {
-      rows.push('<li>' + icon('car') + '<span>' + esc(t('taxi_line', {n: m.taxi.minutes, km: fmtNum(m.taxi.km || 0, 1)})) + '</span></li>');
+      tiles.push('<div class="mode" style="--c:var(--yellow)"><div class="h">' + icon('car') + esc(t('taxi_title')) + '</div><div class="v">' + esc(m.taxi.minutes) + ' ' + esc(t('min')) + '</div>' +
+        '<div class="d">' + esc(fmtNum(m.taxi.km || 0, 1)) + ' ' + esc(km) + ' · ' + esc(t('traffic_note')) + '</div></div>');
     }
     if (m.transit) {
-      const lines = (m.transit.lines || []).map((l) => (l.kind || '') + ' ' + (l.names || []).join(', ')).join(' → ');
-      rows.push('<li>' + icon('bus') + '<span>' + esc(t('transit_line', {lines: lines || t('transit_generic'), n: m.transit.minutes})) +
-        (m.transit.transfers ? ' · ' + esc(t('transfers', {n: m.transit.transfers})) : '') +
-        (m.transit.walk ? ' · ' + esc(m.transit.walk) : '') + '</span></li>');
+      const lines = (m.transit.lines || []).map((l) => ((l.kind || '') + ' ' + (l.names || []).join('/')).trim()).join(' → ');
+      tiles.push('<div class="mode" style="--c:var(--blue)"><div class="h">' + icon('bus') + esc(t('transit_title')) + '</div><div class="v">' + esc(m.transit.minutes) + ' ' + esc(t('min')) + '</div>' +
+        '<div class="d">' + esc([lines || t('transit_generic'), m.transit.transfers ? t('transfers', {n: m.transit.transfers}) : '', m.transit.walk || ''].filter(Boolean).join(' · ')) + '</div></div>');
     }
-    const link = (m.taxi && m.taxi.link) || (m.transit && m.transit.link);
-    return '<ul class="moves">' + rows.join('') + '</ul>' +
-      (link ? '<p class="moves-link"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + icon('external') + esc(t('open_2gis')) + '</a></p>' : '');
+    const link = safeUrl((m.taxi && m.taxi.link) || (m.transit && m.transit.link));
+    return '<div class="list"><div class="hero"><div class="modes' + (tiles.length === 1 ? ' one' : '') + '">' + tiles.join('') + '</div>' +
+      (link ? '<a class="btn prom block" href="' + esc(link) + '" target="_blank" rel="noopener">' + icon('map') + esc(t('open_2gis')) + '</a>' : '') + '</div></div>';
   }
 
-  function accessHTML(card) {
+  function accessInfo(card) {
     const a = card.accessibility;
     const wants = state.chips.wheel || (state.res && state.res.constraints && ['wheelchair', 'stroller'].includes(state.res.constraints.mobility));
-    if (!a || a.value === null || a.value === undefined || a.value === '') {
-      return wants ? '<p class="access access-unknown">' + icon('wheelchair') + '<span>' + esc(t('access_unknown')) + '</span></p>' : '';
-    }
+    if (!a || a.value === null || a.value === undefined || a.value === '') return wants ? {key: 'access_unknown', src: ''} : null;
     const v = String(a.value).toLowerCase();
     const key = (v === 'yes' || v === 'true' || v === 'designated') ? 'access_yes' : v === 'limited' ? 'access_limited' : (v === 'no' || v === 'false') ? 'access_no' : 'access_unknown';
-    return '<p class="access ' + key.replace('_', '-') + '">' + icon('wheelchair') + '<span>' + esc(t(key)) +
-      (a.src ? '<span class="muted"> · ' + esc(t('per_src', {src: srcList(a.src)})) + '</span>' : '') + '</span></p>';
+    return {key: key, src: a.src ? srcList(a.src) : ''};
   }
 
   function fmtEventTime(start, end) {
@@ -1379,24 +1507,52 @@
   function fmtPrice(p) {
     const s = String(p).trim();
     if (/^(0|free|бесплатно|тегін)$/i.test(s)) return t('free');
-    if (/^\d+([.,]\d+)?$/.test(s)) return fmtNum(Number(s.replace(',', '.'))) + ' ₸';
-    return /₸|тг|tg|kzt/i.test(s) ? s : s + ' ₸';
+    if (/^\d+([.,]\d+)?$/.test(s)) return fmtNum(Number(s.replace(',', '.'))) + ' ₸';
+    return /₸|тг|tg|kzt/i.test(s) ? s : s + ' ₸';
   }
-  function eventHTML(card) {
-    if (card.kind !== 'event' && !card.event) return '';
+  function eventInfo(card) {
+    if (card.kind !== 'event' && !card.event) return null;
     const e = card.event || {};
-    const title = e.title && e.title !== card.name ? e.title : '';
-    const when = fmtEventTime(e.start, e.end);
     const rawPrice = e.price_kzt != null ? e.price_kzt : e.price;
-    const price = rawPrice !== undefined && rawPrice !== null && rawPrice !== '' ? fmtPrice(rawPrice) : '';
-    const venue = e.venue_name || e.venue || '';
-    const url = safeUrl(e.url || card.url);
-    return '<div class="event">' + icon('calendar') + '<div class="event-body">' +
-      (title ? '<p class="ev-title">' + esc(title) + '</p>' : '') +
-      (when || venue ? '<p>' + esc([when, venue].filter(Boolean).join(' · ')) + '</p>' : '') +
-      (price ? '<p>' + esc(t('price')) + ': ' + esc(price) + '</p>' : '') +
-      (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(t('event_more')) + icon('external') + '</a>' : '') +
-      '</div></div>';
+    return {
+      title: e.title && e.title !== card.name ? e.title : '',
+      when: fmtEventTime(e.start, e.end),
+      venue: e.venue_name || e.venue || '',
+      price: rawPrice !== undefined && rawPrice !== null && rawPrice !== '' ? fmtPrice(rawPrice) : '',
+      url: safeUrl(e.url || card.url)
+    };
+  }
+  function statusWarn(card) {
+    if (card.status === 'possibly_closed') return '<p class="warnline">' + icon('alert') + '<span>' + esc(t('status_possibly_closed')) + '</span></p>';
+    if (card.status === 'unconfirmed') return '<p class="warnline soft">' + icon('help') + '<span>' + esc(t('status_unconfirmed')) + '</span></p>';
+    return '';
+  }
+  function reviewsText(n) {
+    const v = fmtNum(n, 0);
+    if (state.lang === 'en') return v + (n === 1 ? ' review' : ' reviews') + ' on 2GIS';
+    if (state.lang === 'kk') return v + ' пікір · 2GIS';
+    return v + ' ' + plural(n, ['отзыв', 'отзыва', 'отзывов']) + ' в 2GIS';
+  }
+  function cardCat(card) {
+    const catText = (card.kind !== 'event' && catLabel(card.category)) || card.category_label || '';
+    const tags = [];
+    (card.tags || []).forEach((x) => {
+      const lbl = x === 'event' ? '' : tagLabel(x);
+      if (lbl && lbl.toLowerCase() !== catText.toLowerCase() && !tags.includes(lbl) && tags.length < 3) tags.push(lbl);
+    });
+    return {catText: catText, tags: tags};
+  }
+
+  // 2GIS directions start at the centre of the privacy cell: the exact point stays on the phone
+  function dirLink(card) {
+    if (!isFinite(card.lat) || !isFinite(card.lon)) return null;
+    const to = Number(card.lon).toFixed(6) + '%2C' + Number(card.lat).toFixed(6);
+    if (!state.cell) return 'https://2gis.kz/astana/geo/' + to;
+    const b = geohashBounds(state.cell);
+    return 'https://2gis.kz/astana/directions/points/' + ((b.w + b.e) / 2).toFixed(6) + '%2C' + ((b.s + b.n) / 2).toFixed(6) + '%7C' + to;
+  }
+  function geoLink(card) {
+    return isFinite(card.lat) && isFinite(card.lon) ? 'https://2gis.kz/astana/geo/' + Number(card.lon).toFixed(6) + '%2C' + Number(card.lat).toFixed(6) : null;
   }
 
   function scoreHTML(card) {
@@ -1404,113 +1560,107 @@
     const keys = Object.keys(parts);
     if (!card.score && !keys.length) return '';
     const names = t('score_parts') || {};
-    const total = keys.reduce((s, k) => s + Math.max(0, Number(parts[k]) || 0), 0) || 1;
-    return '<details class="score"><summary>' + esc(t('score')) + ' ' + esc(fmtNum(card.score || 0, 2)) + '</summary>' +
-      (keys.length ? '<div class="score-bar" aria-hidden="true">' + keys.map((k, i) =>
-        '<i class="sb' + (i % 4) + '" style="width:' + (Math.max(0, Number(parts[k]) || 0) / total * 100).toFixed(1) + '%"></i>').join('') + '</div>' +
-        '<ul>' + keys.map((k, i) => '<li><span class="sw sb' + (i % 4) + '" aria-hidden="true"></span>' + esc(names[k] || k) + ' ' + esc(fmtNum(Number(parts[k]) || 0, 2)) + '</li>').join('') + '</ul>' : '') +
-      '</details>';
+    return '<section class="sec"><div class="sec-h"><h3>' + esc(t('why_higher')) + '</h3><span>' + esc(t('score')) + ' ' + esc(fmtNum(card.score || 0, 2)) + '</span></div>' +
+      (keys.length ? '<div class="list">' + keys.map((k) => {
+        const v = Math.max(0, Math.min(1, Number(parts[k]) || 0));
+        return '<div class="row noicon"><span class="gauge" style="grid-column:1/-1"><span class="t">' + esc(cap1(names[k] || k)) + '</span>' +
+          '<span class="bar"><i style="width:' + Math.round(v * 100) + '%"></i></span><b>' + esc(fmtNum(Number(parts[k]) || 0, 2)) + '</b></span></div>';
+      }).join('') + '</div>' : '') +
+      '<p class="sec-f">' + esc(t('weights_note')) + '</p></section>';
   }
 
   function fbHTML(card) {
     const f = state.feedback[card.poi_id];
     const locked = f && (f.st === 'ok' || f.st === 'mock' || f.st === 'sending');
-    const btns = FEEDBACK.map((x) =>
-      '<button type="button" class="fb-btn" data-fb="' + x.kind + '"' + (locked ? ' disabled' : '') +
-      ' aria-pressed="' + String(!!(f && f.kind === x.kind)) + '">' + icon(x.icon) + '<span>' + esc(t(x.key)) + '</span></button>').join('');
+    const rows = FEEDBACK.map((x) => '<button type="button" class="row ' + (x.kind === 'closed' ? 'danger' : 'tint') + '" data-fb="' + x.kind + '" data-poi="' + esc(card.poi_id) + '"' +
+      (locked ? ' disabled' : '') + ' aria-pressed="' + String(!!(f && f.kind === x.kind)) + '"><span class="icn"' + (x.kind === 'closed' ? ' style="color:var(--red)"' : '') + '>' + icon(x.icon) + '</span>' +
+      '<span class="t">' + esc(t(x.key)) + '</span>' + (f && f.kind === x.kind ? '<span class="check">' + icon('check') + '</span>' : '<span></span>') + '</button>').join('');
     let msg = '';
     if (f && f.st === 'ok') msg = t('fb_thanks');
     else if (f && f.st === 'mock') msg = t('fb_thanks_mock');
     else if (f && f.st === 'error') msg = t('fb_error');
-    return '<div class="fb" role="group" aria-label="' + esc(t('fb_label')) + '">' + btns + '</div>' +
-      '<p class="fb-msg' + (f && f.st === 'error' ? ' warn' : '') + '" role="status">' + (msg ? icon(f.st === 'error' ? 'alert' : 'check') + esc(msg) : '') + '</p>';
+    return '<section class="sec"><div class="sec-h"><h3>' + esc(t('report_title')) + '</h3></div><div class="list" role="group" aria-label="' + esc(t('fb_label')) + '">' + rows + '</div>' +
+      '<p class="sec-f" role="status">' + esc(msg) + '</p></section>';
   }
 
-  function expPending() {
-    return '<div class="exp-pending"><span class="sk sk-line w90"></span><span class="sk sk-line w70"></span>' +
-      '<span class="writing">' + icon('sparkle') + esc(t('writing')) + '</span></div>';
-  }
-  function expMissing() {
-    return '<p class="exp-missing">' + icon('info') + esc(t('no_text')) + '</p>';
-  }
   function wordsHTML(text, animate, offset) {
     if (!animate || !motionOK()) return esc(text);
     let n = offset || 0;
     return String(text).split(/(\s+)/).map((w) => (/^\s+$/.test(w) || !w ? w : '<span class="w" style="--i:' + (n++) + '">' + esc(w) + '</span>')).join('');
   }
-  function expHTML(exp, animate) {
-    const idea = exp.source === 'ai_idea';
-    const tpl = !!exp.template;
+  function provHTML(exp) {
+    if (!exp) return '';
+    const idea = exp.source === 'ai_idea' ? ' · ' + esc(t('exp_ai_idea')) : '';
+    if (exp.template) return '<p class="prov" style="--pc:var(--label-2)">' + icon('cpu') + '<span>' + esc(t('tpl_badge_full')) + idea + '</span></p>';
+    return '<p class="prov">' + icon('sparkle') + '<span>' + esc(t('ai_badge_full')) + idea + '</span></p>';
+  }
+  function expBodyHTML(exp, animate) {
     const why = String(exp.why || '');
     const whyWords = why.split(/\s+/).filter(Boolean).length;
-    const src = idea
-      ? '<span class="exp-src idea" title="' + esc(t('exp_ai_idea_title')) + '">' + icon('sparkle') + esc(t('exp_ai_idea')) + '</span>'
-      : '<span class="exp-src poi" title="' + esc(t('exp_poi_title')) + '">' + icon('database') + esc(t('exp_poi')) + '</span>';
-    const badge = tpl
-      ? '<span class="ai-badge tpl"><b>' + icon('cpu') + esc(t('tpl_badge')) + '</b><span>' + esc(t('tpl_badge_full')) + '</span></span>'
-      : '<span class="ai-badge"><b>' + icon('sparkle') + esc(t('ai_badge')) + '</b><span>' + esc(t('ai_badge_full')) + '</span></span>';
-    return '<div class="exp-head">' + src + badge + '</div>' +
-      (why ? '<p class="exp-why"><span class="exp-k">' + esc(t('why')) + '.</span> ' + wordsHTML(why, animate, 0) + '</p>' : '') +
-      (exp.what_to_do ? '<p class="exp-do"><span class="exp-k">' + esc(t('what_to_do')) + '.</span> ' + wordsHTML(exp.what_to_do, animate, whyWords + 2) + '</p>' : '');
+    return (why ? '<div class="why"><p>' + wordsHTML(why, animate, 0) + '</p></div>' : '') +
+      (exp.what_to_do ? '<div class="todo">' + icon('bulb') + '<span>' + wordsHTML(exp.what_to_do, animate, whyWords + 2) + '</span></div>' : '');
+  }
+  function expPending() {
+    return '<div class="ph-stack"><span class="ph" style="width:92%"></span><span class="ph" style="width:72%"></span></div>' +
+      '<p class="prov" style="--pc:var(--label-2);padding:0;margin-top:8px">' + spinner() + '<span>' + esc(t('writing')) + '</span></p>';
+  }
+  function expMissing() {
+    return '<p class="prov warn" style="padding:0">' + icon('info') + '<span>' + esc(t('no_text')) + '</span></p>';
   }
 
-  function cardHTML(card, i, animate) {
+  function heroHTML(card, i, animate) {
     const r = state.res;
     const v = cardView().byIdx[i] || {num: i + 1, alt: false};
     const walk = localWalk(card);
     const exp = r.texts[card.poi_id];
-    // local label keeps the chrome in the current UI language after a language switch; events keep the server label
-    const catText = (card.kind !== 'event' && catLabel(card.category)) || card.category_label || '';
-    const tags = [];
-    (card.tags || []).forEach((x) => {
-      const lbl = x === 'event' ? '' : tagLabel(x);
-      if (lbl && lbl.toLowerCase() !== catText.toLowerCase() && !tags.includes(lbl) && tags.length < 3) tags.push(lbl);
-    });
-    const statusWarn = card.status === 'possibly_closed' ? '<p class="status-warn">' + icon('alert') + esc(t('status_possibly_closed')) + '</p>'
-      : card.status === 'unconfirmed' ? '<p class="status-warn soft">' + icon('help') + esc(t('status_unconfirmed')) + '</p>' : '';
-    const sources = card.source_label || (card.sources || []).map(srcName).join(', ');
+    const cc = cardCat(card);
+    const acc = accessInfo(card);
+    const ev = eventInfo(card);
     let expBody;
-    if (exp) expBody = expHTML(exp, animate);
+    if (exp) expBody = expBodyHTML(exp, animate);
     else if (r.done || r.errorView) expBody = expMissing();
     else expBody = expPending();
-    return '<li class="card' + (animate ? ' card-in' : '') + (i === state.activeIdx ? ' is-active' : '') + (card.kind === 'event' ? ' is-event' : '') +
-      (v.alt ? ' is-alt' : '') + '" id="card-' + i + '" data-idx="' + i + '" data-poi="' + esc(card.poi_id) + '" style="--d:' + (v.num || i) + '">' +
-      '<article aria-labelledby="card-' + i + '-t">' +
-      '<header class="card-head">' + badgeHTML(v) +
-        '<div class="card-tw"><h3 class="card-title" id="card-' + i + '-t">' + esc(card.name) + '</h3>' +
-        '<p class="card-cat">' + (v.alt ? '<span class="tag tag-alt">' + icon('swap') + esc(t('alt_title')) + '</span>' : '') +
-        (card.kind === 'event' ? '<span class="tag tag-event">' + icon('calendar') + esc(t('event')) + '</span>' : '') +
-        '<span class="card-cat-text">' + esc([catText].concat(tags).filter(Boolean).join(' · ')) + '</span></p></div>' +
-        '<button type="button" class="icon-btn card-map" data-act="map" aria-label="' + esc(t('show_on_map') + ': ' + card.name) + '" title="' + esc(t('show_on_map')) + '">' + icon('pin') + '</button>' +
-        '</header>' +
-      '<p class="facts"><span class="fact" title="' + esc(t('card_walk_title')) + '">' + icon('walk') +
-        esc(t('card_walk', {min: walk.min, dist: fmtDist(walk.m)})) + '</span>' +
-        (card.visit_min ? '<span class="fact">' + icon('clock') + esc(t('visit', {n: card.visit_min})) + '</span>' : '') +
-        (card.rating ? '<span class="fact fact-rating" title="2GIS">★ ' + esc(fmtNum(card.rating, 1)) + ' · ' +
-          esc(fmtNum(card.reviews || 0, 0)) + ' ' + esc({ru: 'отзывов в 2GIS', kk: '2GIS пікірі', en: 'reviews on 2GIS'}[state.lang] || 'отзывов в 2GIS') + '</span>' : '') + '</p>' +
-      (card.kind === 'event' ? '' : hoursHTML(card.hours)) + statusWarn + accessHTML(card) + eventHTML(card) +
-      ((card.taxi || card.transit) ? '<div class="card-moves"><p class="moves-title">' + esc(t('far_how')) + '</p>' + movesHTML(card) + '</div>' : '') +
-      (card.description ? '<p class="desc">' + esc(card.description) + (card.description_ai ? ' <span class="tag tag-ai-sm">' + icon('sparkle') + esc(t('desc_ai')) + '</span>' : '') + '</p>' : '') +
-      '<div class="exp' + (exp && animate ? ' exp-in' : '') + '" id="exp-' + i + '" aria-live="polite">' + expBody + '</div>' +
-      '<footer class="card-foot">' +
-        '<p class="src">' + icon('database') + '<span>' + esc(t('sources', {list: sources})) + '</span></p>' +
-        '<div class="card-actions">' + fbHTML(card) + '</div>' + scoreHTML(card) +
-      '</footer></article></li>';
+    const route = dirLink(card);
+    const meta = ['<span>' + icon('walk') + ' <b>' + esc(walk.min + ' ' + t('min')) + '</b> · ' + esc(fmtDist(walk.m)) + '</span>'];
+    if (card.visit_min) meta.push('<span>' + icon('hourglass') + ' ' + esc(t('visit', {n: card.visit_min})) + '</span>');
+    if (acc && acc.key !== 'access_unknown') meta.push('<span>' + icon('wheelchair') + ' ' + esc(t(acc.key)) + '</span>');
+    if (card.taxi) meta.push('<span>' + icon('car') + ' ' + esc(card.taxi.minutes + ' ' + t('min')) + '</span>');
+    if (card.transit) meta.push('<span>' + icon('bus') + ' ' + esc(card.transit.minutes + ' ' + t('min')) + '</span>');
+    return '<div class="sec card' + (animate ? ' card-in' : '') + (i === state.activeIdx ? ' is-active' : '') + '" id="card-' + i + '" data-idx="' + i + '" data-poi="' + esc(card.poi_id) + '" style="--d:' + (v.num || i) + '">' +
+      '<article class="list" aria-labelledby="card-' + i + '-t"><div class="hero">' +
+      '<div class="hero-top">' + badgeHTML(v, card) + '<div><h2 id="card-' + i + '-t">' + esc(card.name) + '</h2><div class="c">' + esc([cc.catText].concat(cc.tags).filter(Boolean).join(' · ')) +
+        (ev ? ' <span class="cap p">' + icon('calendar') + esc(t('event')) + '</span>' : '') + '</div></div>' +
+        (card.rating ? '<div class="rate"><b>' + icon('starf') + esc(fmtNum(card.rating, 1)) + '</b><span>' + esc(reviewsText(card.reviews || 0)) + '</span></div>' : '<span></span>') + '</div>' +
+      (card.kind === 'event' ? '' : hoursLine(card.hours)) + statusWarn(card) +
+      '<div class="meta">' + meta.join('') + '</div>' +
+      (ev && (ev.when || ev.venue) ? '<div class="meta"><span>' + icon('calendar') + ' ' + esc([ev.when, ev.venue].filter(Boolean).join(' · ')) + '</span></div>' : '') +
+      '<div class="hr"></div>' +
+      '<div class="exp" id="exp-' + i + '" aria-live="polite">' + expBody + '</div>' +
+      '<div class="btnrow">' + (route ? '<a class="btn prom grow" href="' + esc(route) + '" target="_blank" rel="noopener">' + icon('dirs') + esc(t('route_btn')) + '</a>' : '') +
+        '<button type="button" class="btn gray' + (route ? '' : ' grow') + '" data-act="open">' + esc(t('more_btn')) + '</button>' +
+        '<button type="button" class="btn gray icon" data-act="map" aria-label="' + esc(t('show_on_map') + ': ' + card.name) + '" title="' + esc(t('show_on_map')) + '">' + icon('pin') + '</button></div>' +
+      '</div></article><div id="prov-' + i + '">' + provHTML(exp) + '</div></div>';
+  }
+  function altRowHTML(card, i) {
+    const walk = localWalk(card);
+    const hp = hoursParts(card.hours);
+    const bits = [walk.min + ' ' + t('min'), card.kind === 'event' ? '' : hp.main, card.rating ? '★ ' + fmtNum(card.rating, 1) + (card.reviews ? ' (' + card.reviews + ')' : '') : ''].filter(Boolean);
+    return '<button type="button" class="row card' + (i === state.activeIdx ? ' is-active' : '') + '" id="card-' + i + '" data-idx="' + i + '" data-poi="' + esc(card.poi_id) + '" data-act="open">' +
+      badgeHTML({}, card) + '<span class="t">' + esc(card.name) + '<span class="s">' + esc(bits.join(' · ')) + '</span></span><span class="chev">' + icon('chevR') + '</span></button>';
   }
 
   function renderCards(animate) {
     const r = state.res;
-    const list = $('#cards');
+    const box = $('#cards');
     if (!r || !r.cards) return;
     if (!r.cards.length) {
-      list.innerHTML = '<ol class="cards"><li class="card nothing">' + icon('info') + '<p>' + esc(t('nothing_found')) + '</p></li></ol>';
+      box.innerHTML = '<div class="list tiles"><div class="row top">' + tile('search', 'var(--gray)') + '<span class="t">' + esc(t('nothing_found')) + '</span><span></span></div></div>';
       return;
     }
     const view = cardView();
-    list.innerHTML = '<ol class="cards">' + view.main.map((x) => cardHTML(x.c, x.i, animate)).join('') + '</ol>' +
-      (view.alts.length ? '<section class="alts" aria-labelledby="alts-h"><h3 class="alt-title" id="alts-h">' + icon('swap') +
-        esc(t(view.alts.length > 1 ? 'alt_title_many' : 'alt_title')) + '</h3><p class="hint">' + esc(t('alt_hint')) + '</p>' +
-        '<ul class="cards cards-alt">' + view.alts.map((x) => cardHTML(x.c, x.i, animate)).join('') + '</ul></section>' : '');
+    box.innerHTML = '<div class="view">' + view.main.map((x) => heroHTML(x.c, x.i, animate)).join('') +
+      (view.alts.length ? '<section class="sec"><div class="sec-h"><h3>' + esc(t('if_not')) + '</h3><span>' + esc(t('alt_sub')) + '</span></div><div class="list">' +
+        view.alts.map((x) => altRowHTML(x.c, x.i)).join('') + '</div><p class="sec-f">' + esc(t('alt_hint')) + '</p></section>' : '') + '</div>';
   }
 
   function applyText(exp, animate) {
@@ -1518,38 +1668,56 @@
     const i = (r.cards || []).findIndex((c) => c.poi_id === exp.poi_id);
     if (i < 0) return; // arrives before cards: kept in r.texts, applied when cards render
     const box = $('#exp-' + i);
-    if (!box) return;
-    box.innerHTML = expHTML(exp, animate);
-    if (animate) { box.classList.remove('exp-in'); void box.offsetWidth; box.classList.add('exp-in'); }
+    if (box) {
+      box.innerHTML = expBodyHTML(exp, animate);
+      const pv = $('#prov-' + i);
+      if (pv) pv.innerHTML = provHTML(exp);
+    }
+    if (state.panel && state.panel.kind === 'detail' && state.panel.idx === i) renderPanel();
   }
 
+  function traceStats(tr) {
+    const steps = Array.isArray(tr.steps) ? tr.steps : [];
+    const totalStep = steps.find((x) => x.service === 'orchestrator');
+    const parts = steps.filter((x) => x !== totalStep);
+    const total = totalStep ? Number(totalStep.ms) || 0 : parts.reduce((s, x) => s + (Number(x.ms) || 0), 0);
+    return {steps: steps, totalStep: totalStep, parts: parts, total: total};
+  }
   function renderTrace() {
     const r = state.res;
     const tr = r && r.trace;
     const box = $('#trace');
     if (!tr) { box.innerHTML = ''; return; }
-    const steps = Array.isArray(tr.steps) ? tr.steps : [];
-    const totalStep = steps.find((x) => x.service === 'orchestrator');
-    const parts = steps.filter((x) => x !== totalStep);
-    const total = totalStep ? Number(totalStep.ms) || 0 : parts.reduce((s, x) => s + (Number(x.ms) || 0), 0);
-    const max = Math.max(1, ...parts.map((s) => Number(s.ms) || 0));
+    const st = traceStats(tr);
+    box.innerHTML = '<div class="list tiles"><button type="button" class="row" data-act="trace">' + tile('list', 'var(--indigo)') + '<span class="t">' + esc(t('trace_title')) +
+      '<span class="s">' + esc(t('trace_meta', {n: st.parts.length + ' ' + plural(st.parts.length, t('step_forms')), s: fmtDur(st.total)})) + '</span></span><span class="chev">' + icon('chevR') + '</span></button></div>';
+    if (state.panel && state.panel.kind === 'trace') renderPanel();
+  }
+  const STEP_TILE = {browser: ['lock', 'var(--gray)'], session: ['clock', 'var(--gray)'], 'events-api': ['calendar', 'var(--purple)'], 'feedback-api': ['flag', 'var(--orange)'], context: ['sun', 'var(--orange)'], nlu: ['brain', 'var(--purple)'], retrieval: ['search', 'var(--blue)'],
+    ranking: ['scale', 'var(--tint)'], routing: ['route', 'var(--teal)'], 'catalog-api': ['database', 'var(--brown)'], 'places-live': ['pinf', 'var(--red)'],
+    explain: ['sparkle', 'var(--purple)'], guard: ['shield', 'var(--teal)'], orchestrator: ['cpu', 'var(--indigo)']};
+  function traceHTML() {
+    const r = state.res;
+    const tr = r && r.trace;
+    if (!tr) return '<p class="note">' + esc(t('status_waiting')) + '</p>';
+    const st = traceStats(tr);
+    const max = Math.max(1, ...st.parts.map((s) => Number(s.ms) || 0));
     const mode = String(tr.mode || 'template');
-    const modeTag = mode === 'ai' ? ['tag-ai', t('mode_ai')] : mode.indexOf('ai') === 0 ? ['tag-ai', t('mode_mixed')] : ['tag-tpl', t('mode_template')];
-    const li = (arr) => (arr && arr.length ? arr.map((x) => '<li>' + esc(x) + '</li>').join('') : '<li>—</li>');
-    box.innerHTML = '<details class="trace"' + (state.traceOpen ? ' open' : '') + '>' +
-      '<summary>' + icon('cpu') + '<span class="tr-title">' + esc(t('trace_title')) + '</span>' +
-      '<span class="muted">' + esc(t('trace_meta', {n: parts.length + ' ' + plural(parts.length, t('step_forms')), s: fmtDur(total)})) + '</span>' +
-      '<span class="sum-chev">' + icon('chevron') + '</span></summary>' +
-      '<div class="trace-body"><ol class="steps">' + steps.map((s) =>
-        '<li><div class="st-head"><b>' + esc(s.name) + '</b><code>' + esc(s.service) + '</code><span class="st-ms">' + esc(fmtDur(s.ms)) + '</span></div>' +
-        '<div class="st-bar" aria-hidden="true"><i style="width:' + (s === totalStep ? 100 : Math.max(2, (Number(s.ms) || 0) / max * 100)).toFixed(1) + '%"></i></div>' +
-        (s.detail ? '<p>' + esc(s.detail) + '</p>' : '') + '</li>').join('') + '</ol>' +
-      '<div class="llm-io"><div class="io sent"><h4>' + icon('send') + esc(t('sent_llm')) + '</h4><ul>' + li(tr.sent_to_llm) + '</ul></div>' +
-      '<div class="io kept"><h4>' + icon('eyeOff') + esc(t('not_sent')) + '</h4><ul>' + li(tr.not_sent) + '</ul></div></div>' +
-      '<p class="model-line">' + icon('cpu') + esc(t('model')) + ': <b>' + esc(tr.model || '—') + '</b> · ' + esc(t('mode_label')) + ': ' +
-      '<span class="tag ' + modeTag[0] + '">' + esc(modeTag[1]) + '</span></p>' +
-      '</div></details>';
-    $('details', box).addEventListener('toggle', (e) => { state.traceOpen = e.target.open; });
+    const modeTag = mode === 'ai' ? ['p', t('mode_ai')] : mode.indexOf('ai') === 0 ? ['p', t('mode_mixed')] : ['', t('mode_template')];
+    const ul = (arr) => (arr && arr.length ? '<ul class="ul">' + arr.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '');
+    return '<div class="ttl" style="padding:0 4px"><h1 class="big">' + esc(t('trace_title')) + '</h1><p>' + esc(t('trace_total', {s: fmtDur(st.total)})) + '</p></div>' +
+      '<div class="list tiles">' + st.steps.map((s) => {
+        const tl = STEP_TILE[s.service] || ['cpu', 'var(--gray)'];
+        const pct = s === st.totalStep ? 100 : Math.max(2, (Number(s.ms) || 0) / max * 100);
+        return '<div class="row top">' + tile(tl[0], tl[1]) + '<span class="t"><b>' + esc(s.name || s.service) + '</b>' + (s.detail ? '<span class="x">' + esc(s.detail) + '</span>' : '') +
+          '<span class="stepbar" style="--c:' + tl[1] + '"><i style="width:' + pct.toFixed(1) + '%"></i></span></span><span class="tr num">' + esc(fmtDur(s.ms)) + '</span></div>';
+      }).join('') + '</div>' +
+      '<section class="sec"><div class="sec-h"><h3>' + esc(t('data_flows')) + '</h3></div><div class="list tiles">' +
+      '<div class="row top">' + tile('sparkle', 'var(--purple)') + '<span class="t">' + esc(t('flows_ai')) + ul(tr.sent_to_llm) + '</span><span></span></div>' +
+      '<div class="row top">' + tile('map', 'var(--tint)') + '<span class="t">' + esc(t('flows_2gis')) + '<span class="s">' + esc(t('flows_2gis_text')) + '</span></span><span></span></div>' +
+      '<div class="row top">' + tile('lock', 'var(--gray)') + '<span class="t">' + esc(t('nowhere')) + ul(tr.not_sent) + '</span><span></span></div></div>' +
+      '<p class="sec-f">' + esc(t('model')) + ': <b>' + esc(tr.model || '—') + '</b> · ' + esc(t('mode_label')) + ': <span class="cap ' + modeTag[0] + '">' + esc(modeTag[1]) + '</span></p>' +
+      '<p class="sec-f">' + esc(t('law_note')) + '</p></section>';
   }
 
   function renderDone() {
@@ -1564,10 +1732,17 @@
     if (r.noAi) key = 'done_noai';
     else if (d.fallback) key = d.ai_generated ? 'done_partial' : 'done_fallback';
     const warn = key === 'done_fallback' || key === 'done_partial';
-    box.innerHTML = '<p class="done-line' + (warn ? ' warn' : '') + '">' + icon(warn ? 'alert' : d.ai_generated ? 'sparkle' : 'check') +
-      '<span>' + esc(t(key)) + '</span>' +
-      (d.request_id ? '<span class="muted"> · ' + esc(t('request_id')) + ' <code>' + esc(d.request_id) + '</code></span>' : '') + '</p>';
+    box.innerHTML = '<p class="prov' + (warn ? ' warn' : '') + '" style="--pc:' + (d.ai_generated ? 'var(--purple)' : 'var(--tint)') + '">' + icon(warn ? 'alert' : d.ai_generated ? 'sparkle' : 'check') +
+      '<span>' + esc(t(key)) + (d.request_id ? ' · ' + esc(t('request_id')) + ' <code>' + esc(d.request_id) + '</code>' : '') + '</span></p>' +
+      '<p class="note">' + esc(t('law_note')) + '</p>';
     if (r.elapsed != null) setStatus(t('status_done', {s: fmtDur(r.elapsed)}));
+    // ?open=N | ?open=trace — open a page once the answer is complete (demos and screenshots)
+    const op = params.get('open');
+    if (op != null && !r.__opened) {
+      r.__opened = true;
+      if (op === 'trace') openPanel({kind: 'trace'});
+      else if (r.cards && r.cards[+op]) selectCard(+op, {open: true, fly: true});
+    }
   }
 
   function renderErrorBox() {
@@ -1575,12 +1750,179 @@
     const box = $('#error');
     if (!r || !r.errorView) { box.innerHTML = ''; return; }
     const v = r.errorView;
-    box.innerHTML = '<div class="alert" role="alert">' + icon('alert') + '<div>' +
-      '<p class="alert-title">' + esc(t('error_title')) + '</p><p>' + esc(v.msg) + '</p>' +
-      '<div class="alert-actions">' + (v.offer ? '<button type="button" class="btn btn-soft" data-act="example">' + icon('sparkle') + '<span>' + esc(t('show_example')) + '</span></button>' : '') +
-      '<button type="button" class="btn btn-ghost" data-act="retry">' + esc(t('retry')) + '</button></div></div></div>';
+    box.innerHTML = '<div class="list tiles alert" role="alert"><div class="row top">' + tile('alert', 'var(--orange)') + '<span class="t"><b>' + esc(t('error_title')) + '</b>' +
+      '<span class="s">' + esc(v.msg) + '</span><span class="btnrow">' +
+      (v.offer ? '<button type="button" class="btn tinted sm" data-act="example">' + icon('sparkle') + esc(t('show_example')) + '</button>' : '') +
+      '<button type="button" class="btn gray sm" data-act="retry">' + esc(t('retry')) + '</button></span></span><span></span></div></div>';
   }
 
+  /* ------------------------------------------------------------ second column: place, how I chose, settings, about, «Откуда?» */
+  function navHTML(left, title, right) {
+    return '<div class="nav">' + (left || '<span></span>') + '<h2 id="p2-title">' + esc(title || '') + '</h2><div class="r">' + (right || '') + '</div></div>';
+  }
+  function openPanel(p) {
+    const el = $('#panel2');
+    const wasOpen = !!state.panel;
+    clearTimeout(closeTimer);
+    state.panel = p;
+    renderPanel();
+    el.hidden = false;
+    void el.offsetWidth;
+    el.classList.add('open');
+    $('#scrim').classList.add('open');
+    document.body.classList.add('p2');
+    if (!wasOpen && !mobileMQ.matches && state.res && state.res.cards && p.kind !== 'detail') fitToResults();
+    const f = el.querySelector(p.kind === 'from' && !mobileMQ.matches ? '#from-q' : '.nav button, .nav a');
+    if (f) f.focus({preventScroll: true});
+  }
+  let closeTimer = null;
+  function closePanel(silent) {
+    if (!state.panel) return;
+    const was = state.panel;
+    state.panel = null;
+    const el = $('#panel2');
+    el.classList.remove('open');
+    $('#scrim').classList.remove('open');
+    document.body.classList.remove('p2');
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => { if (!state.panel) { el.hidden = true; el.innerHTML = ''; el.dataset.kind = ''; } }, mobileMQ.matches ? 450 : 0);
+    if (silent) return;
+    if (!mobileMQ.matches && state.res && state.res.cards) fitToResults();
+    if (was.kind === 'detail') {
+      const c = $('#card-' + was.idx);
+      const b = c && (c.matches('[data-act="open"]') ? c : c.querySelector('[data-act="open"]'));
+      if (b) b.focus({preventScroll: true});
+    }
+  }
+  function renderPanel() {
+    const p = state.panel;
+    if (!p) return;
+    const el = $('#panel2');
+    const closeBtn = '<button type="button" class="circle sm" data-act="close" aria-label="' + esc(t('close_btn')) + '">' + icon('close') + '</button>';
+    const back = '<button type="button" class="l" data-act="close">' + icon('back') + esc(t('back_plan')) + '</button>';
+    let nav = '', body = '';
+    if (p.kind === 'detail') {
+      const card = state.res && state.res.cards && state.res.cards[p.idx];
+      if (!card) { closePanel(true); return; }
+      nav = navHTML(back, card.name, closeBtn);
+      body = detailHTML(card, p.idx);
+    } else if (p.kind === 'trace') {
+      nav = navHTML(back, '', closeBtn);
+      body = traceHTML();
+    } else if (p.kind === 'settings') {
+      nav = navHTML('', t('settings'), '<button type="button" class="textbtn done" data-act="close">' + esc(t('done_btn')) + '</button>');
+      body = settingsHTML();
+    } else if (p.kind === 'about') {
+      nav = navHTML('<button type="button" class="l" data-act="settings">' + icon('back') + esc(t('settings')) + '</button>', '', closeBtn);
+      body = '<div class="ttl" style="padding:0 4px"><h1 class="big">' + esc(t('about_title')) + '</h1></div>' + aboutHTML();
+    } else if (p.kind === 'from') {
+      if (el.dataset.kind === 'from' && $('#from-q')) { renderFromResults(); renderMsgs(); return; }   // keep the field (and the keyboard) alive
+      nav = navHTML('', t('origin_title'), '<button type="button" class="textbtn" data-act="close">' + esc(t('cancel')) + '</button>');
+      body = fromHTML();
+    }
+    const key = p.kind + (p.idx != null ? p.idx : '');
+    const prev = el.querySelector('.sheet-body');
+    const top = prev && el.dataset.kind === key ? prev.scrollTop : 0;
+    el.innerHTML = nav + '<div class="sheet-body">' + body + '</div>';
+    el.dataset.kind = key;
+    el.querySelector('.sheet-body').scrollTop = top;
+    if (p.kind === 'settings') { syncSimUI(); renderMsgs(); }
+    if (p.kind === 'from') { renderFromResults(); renderMsgs(); }
+  }
+
+  function detailHTML(card, i) {
+    const r = state.res;
+    const v = cardView().byIdx[i] || {};
+    const walk = localWalk(card);
+    const exp = r.texts[card.poi_id];
+    const cc = cardCat(card);
+    const acc = accessInfo(card);
+    const ev = eventInfo(card);
+    const hp = hoursParts(card.hours);
+    const full = Math.floor((Number(card.rating) || 0) + 0.25);   // 4,5 → four gold stars and a grey one: never round a rating up
+    const stars = Array.from({length: 5}, (_, k) => icon('starf', k < full ? '' : 'dim')).join('');
+    const route = dirLink(card), geo = geoLink(card);
+    const sources = card.source_label || (card.sources || []).map(srcName).join(', ');
+    let h = '<div class="place-h"><h1>' + esc(card.name) + '</h1><div class="c">' + esc([cc.catText].concat(cc.tags).filter(Boolean).join(' · ')) +
+      (v.alt ? ' <span class="cap">' + icon('swap') + esc(t('alt_title')) + '</span>' : '') + (ev ? ' <span class="cap p">' + icon('calendar') + esc(t('event')) + '</span>' : '') + '</div>' +
+      (card.rating ? '<div class="stars"><i>' + stars + '</i><span><b style="color:var(--label)">' + esc(fmtNum(card.rating, 1)) + '</b> · ' + esc(reviewsText(card.reviews || 0)) + '</span></div>' : '') +
+      '</div>' + statusWarn(card);
+    h += '<div class="acts">' + (route ? '<a class="act prom" href="' + esc(route) + '" target="_blank" rel="noopener">' + icon('dirs') + esc(t('route_btn')) + '</a>' : '') +
+      '<button type="button" class="act" data-act="map" data-idx="' + i + '">' + icon('pin') + esc(t('on_map_btn')) + '</button>' +
+      (geo ? '<a class="act" href="' + esc(geo) + '" target="_blank" rel="noopener">' + icon('map') + esc(t('in_2gis')) + '</a>' : '') + '</div>';
+    const rows = [];
+    if (card.kind !== 'event') {
+      rows.push('<div class="row top"><span class="icn">' + icon(hp.level === 'open_area' ? 'tree' : 'clock') + '</span><span class="t">' + hoursLine(card.hours) +
+        (['high', 'medium', 'low'].includes(hp.level) ? '<span class="s">' + esc(cap1(t('lvl_' + hp.level))) + '</span>' : '') + '</span><span></span></div>');
+    }
+    rows.push('<div class="row"><span class="icn">' + icon('walk') + '</span><span class="t">' + esc(t('card_walk', {min: walk.min, dist: fmtDist(walk.m)})) + '</span><span></span></div>');
+    if (card.visit_min) rows.push('<div class="row"><span class="icn">' + icon('hourglass') + '</span><span class="t">' + esc(cap1(t('visit', {n: card.visit_min}))) + '</span><span></span></div>');
+    if (acc) rows.push('<div class="row"><span class="icn">' + icon('wheelchair') + '</span><span class="t">' + esc(t(acc.key)) + (acc.src ? '<span class="s">' + esc(t('per_src', {src: acc.src})) + '</span>' : '') + '</span><span></span></div>');
+    if (ev) {
+      if (ev.title) rows.push('<div class="row"><span class="icn">' + icon('calendar') + '</span><span class="t"><b>' + esc(ev.title) + '</b></span><span></span></div>');
+      if (ev.when || ev.venue) rows.push('<div class="row"><span class="icn">' + icon('clock') + '</span><span class="t">' + esc([ev.when, ev.venue].filter(Boolean).join(' · ')) + '</span><span></span></div>');
+      if (ev.price) rows.push('<div class="row"><span class="icn">' + icon('check') + '</span><span class="t">' + esc(t('price')) + ': ' + esc(ev.price) + '</span><span></span></div>');
+      if (ev.url) rows.push('<a class="row" href="' + esc(ev.url) + '" target="_blank" rel="noopener"><span class="icn">' + icon('external') + '</span><span class="t" style="color:var(--tint-text)">' + esc(t('event_more')) + '</span><span class="chev">' + icon('chevR') + '</span></a>');
+    }
+    h += '<div class="list">' + rows.join('') + '</div>';
+    if (card.taxi || card.transit) h += '<section class="sec"><div class="sec-h"><h3>' + esc(t('far_how')) + '</h3></div>' + movesHTML(card) + '</section>';
+    let why;
+    if (exp) why = '<div class="list"><div class="para">' + expBodyHTML(exp, false) + (cc.tags.length ? '<div class="caps" style="margin-top:10px">' + cc.tags.map((x) => '<span class="cap">' + esc(x) + '</span>').join('') + '</div>' : '') + '</div></div>' + provHTML(exp);
+    else if (r.done || r.errorView) why = expMissing();
+    else why = '<div class="list"><div class="para">' + expPending() + '</div></div>';
+    h += '<section class="sec"><div class="sec-h"><h3>' + esc(t('why')) + '</h3></div>' + why + '</section>';
+    if (card.description) {
+      h += '<div class="list"><div class="para"><p class="desc">' + esc(card.description) + '</p>' +
+        (card.description_ai ? '<p class="prov" style="padding:0;margin-top:8px">' + icon('sparkle') + '<span>' + esc(t('desc_ai')) + '</span></p>' : '') + '</div></div>';
+    }
+    h += scoreHTML(card);
+    h += fbHTML(card);
+    h += '<p class="note">' + esc(t('sources', {list: sources})) + '</p>';
+    return h;
+  }
+
+  function settingsHTML() {
+    const sw = (id, on, label) => '<button type="button" class="sw" role="switch" id="' + id + '" aria-checked="' + String(!!on) + '" aria-label="' + esc(label) + '"></button>';
+    const chev = '<span class="chev">' + icon('chevR') + '</span>';
+    return '<section class="sec"><div class="sec-h"><h3>' + esc(t('language')) + '</h3></div><div class="list">' +
+      [['ru', 'Русский'], ['kk', 'Қазақша'], ['en', 'English']].map(([k, n]) => '<button type="button" class="row noicon" data-lang="' + k + '" lang="' + k + '" aria-pressed="' + String(state.lang === k) + '"><span class="t">' + n + '</span>' +
+        (state.lang === k ? '<span class="check">' + icon('check') + '</span>' : '<span></span>') + '</button>').join('') + '</div></section>' +
+      '<section class="sec"><div class="sec-h"><h3>' + esc(t('appearance')) + '</h3></div><div class="seg" role="group" aria-label="' + esc(t('appearance')) + '">' +
+        ['auto', 'light', 'dark'].map((k) => '<button type="button" data-theme-opt="' + k + '" aria-pressed="' + String(state.theme === k) + '">' + esc(t('theme_' + k)) + '</button>').join('') + '</div></section>' +
+      '<section class="sec"><div class="sec-h"><h3>' + esc(t('ai_section')) + '</h3></div><div class="list tiles"><div class="row">' + tile('cpu', 'var(--gray)') +
+        '<span class="t">' + esc(t('noai_label')) + '</span>' + sw('sw-noai', state.noAi, t('noai_label')) + '</div></div>' +
+        '<p class="sec-f">' + esc(t('noai_info')) + '</p></section>' +
+      '<section class="sec"><div class="sec-h"><h3>' + esc(t('sim_title')) + '</h3></div><div class="list tiles">' +
+        '<div class="row">' + tile('sliders', 'var(--blue)') + '<span class="t">' + esc(t('sim_enable')) + '</span>' + sw('sim-on', state.sim.on, t('sim_enable')) + '</div>' +
+        '<div class="row stack"><span class="s" style="margin:0">' + esc(t('sim_presets')) + '</span><div class="caps">' +
+          ['frost', 'warm', 'night'].map((p) => '<button type="button" class="cap" data-preset="' + p + '">' + esc(t('preset_' + p)) + '</button>').join('') + '</div></div>' +
+        '<div class="sim-grid"><label class="field"><span>' + esc(t('sim_time')) + '</span><input type="datetime-local" id="sim-dt"></label>' +
+          '<label class="field"><span>' + esc(t('sim_temp')) + ' <output id="sim-temp-out"></output></span><input type="range" id="sim-temp" min="-30" max="30" step="1"></label>' +
+          '<label class="field"><span>' + esc(t('sim_wind')) + ' <output id="sim-wind-out"></output></span><input type="range" id="sim-wind" min="0" max="80" step="1"></label></div>' +
+        '<div class="row">' + tile('snow', 'var(--teal)') + '<span class="t">' + esc(t('sim_precip')) + '</span>' + sw('sim-precip', state.sim.precip, t('sim_precip')) + '</div></div>' +
+        '<p class="sec-f">' + esc(state.mock ? t('sim_note_mock') : t('sim_note')) + '</p></section>' +
+      '<section class="sec"><div class="sec-h"><h3>' + esc(t('privacy_title')) + '</h3></div><div class="list tiles">' +
+        '<div class="row">' + tile('lock', 'var(--blue)') + '<span class="t">' + esc(t('server_sees')) + '<span class="s">' + esc(t('server_sees_val')) +
+          (state.cell ? ' · <code>' + esc(state.cell) + '</code>' : '') + '</span></span><span></span></div>' +
+        '<div class="row">' + tile('clock', 'var(--indigo)') + '<span class="t">' + esc(t('session_row')) + '</span><span class="tr">' + esc(t('session_val')) + '</span></div>' +
+        '<button type="button" class="row danger" data-act="delete">' + tile('trash', 'var(--red)') + '<span class="t">' + esc(t('delete')) + '</span><span></span></button></div>' +
+        '<div class="form-msg" id="delete-msg" role="status"></div>' +
+        '<p class="sec-f">' + esc(t('privacy_foot')) + '</p></section>' +
+      '<section class="sec"><div class="sec-h"><h3>' + esc(t('data_section')) + '</h3></div><div class="list tiles">' +
+        '<button type="button" class="row" data-act="about">' + tile('globe', 'var(--teal)') + '<span class="t">' + esc(t('about_sources')) + '</span>' + chev + '</button>' +
+        '<a class="row" href="https://dev.2gis.ru" target="_blank" rel="noopener">' + tile('map', 'var(--tint)') + '<span class="t">' + esc(t('powered_2gis')) + '</span><span class="chev">' + icon('external') + '</span></a></div>' +
+        '<p class="sec-f">' + esc(t('credits')) + '</p></section>';
+  }
+
+  function aboutHTML() {
+    const secs = t('about_sections');
+    const rows = t('src_rows');
+    return secs.map((s) => '<section class="sec"><div class="sec-h"><h3>' + esc(s.h) + '</h3></div><div class="list"><div class="para"><ul class="ul" style="margin:0;color:var(--label)">' +
+      s.items.map((i) => '<li>' + esc(i) + '</li>').join('') + '</ul></div></div></section>').join('') +
+      '<section class="sec"><div class="sec-h"><h3>' + esc(t('about_sources')) + '</h3></div><div class="list">' +
+      rows.map((r) => '<div class="row noicon src-row"><span class="t"><span>' + esc(r[0]) + '</span><span class="lic">' + esc(r[1]) + '</span><span class="use">' + esc(r[2]) + '</span></span><span></span></div>').join('') +
+      '</div><p class="sec-f">' + esc(t('about_map')) + '</p></section>';
+  }
   /* ------------------------------------------------------------ feedback */
   async function sendFeedback(poiId, kind) {
     const r = state.res;
@@ -1606,11 +1948,9 @@
     refreshFeedback(poiId);
   }
   function refreshFeedback(poiId) {
-    const r = state.res;
-    const i = (r.cards || []).findIndex((c) => c.poi_id === poiId);
-    const li = $('#card-' + i);
-    if (!li) return;
-    $('.card-actions', li).innerHTML = fbHTML(r.cards[i]);
+    if (!state.panel || state.panel.kind !== 'detail') return;
+    const c = state.res && state.res.cards && state.res.cards[state.panel.idx];
+    if (c && c.poi_id === poiId) renderPanel();
   }
 
   /* ------------------------------------------------------------ delete my data */
@@ -1631,14 +1971,17 @@
     // forget everything personal held in memory as well
     state.origin = null;
     state.cell = null;
+    state.where = null;
     state.chips = {time: null, kids: false, wheel: false, group: 1, interests: []};
     state.noAi = false;
     state.sim.on = false;
     state.res = null;
     state.feedback = {};
+    state.theme = 'auto';
+    state.fromQuery = '';
+    state.fromItems = null;
     $('#q').value = '';
     ['#ctx', '#constraints', '#route', '#cards', '#error', '#trace', '#done'].forEach((s) => { $(s).innerHTML = ''; });
-    $('#empty').hidden = false;
     $('#mock-banner').hidden = !state.mock;
     setStatus('');
     setBusy(false);
@@ -1646,14 +1989,14 @@
     updateOriginOnMap(false);
     renderOrigin();
     syncChipsUI();
-    syncSimUI();
-    expandForm(false);
+    applyTheme();
+    showView('form');
     state.formMsgKey = null;
     state.originMsgKey = null;
     state.deleteMsgKey = {key: key, tone: 'ok'};
+    renderPanel();
     renderMsgs();
   }
-
   /* ------------------------------------------------------------ simulator presets */
   function ymd(d) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -1674,129 +2017,219 @@
     }
     state.sim.on = true;
     syncSimUI();
-    renderSummary();
+  }
+
+  /* ------------------------------------------------------------ phone sheet: detents + drag (desktop: a fixed panel) */
+  const DETENTS = {small: 168, medium: 0.52, large: 0.9};
+  function detentPx(d) {
+    const v = DETENTS[d] || DETENTS.medium;
+    return v > 1 ? v : Math.round(window.innerHeight * v);
+  }
+  function setDetent(d) {
+    state.detent = DETENTS[d] ? d : 'medium';
+    const sh = $('#sheet');
+    sh.dataset.detent = state.detent;
+    sh.style.setProperty('--sheet-h', detentPx(state.detent) + 'px');
+    document.body.classList.toggle('det-large', mobileMQ.matches && state.detent === 'large');
+    $('#attrib').style.bottom = mobileMQ.matches ? (detentPx(state.detent) + 8) + 'px' : '';
+  }
+  function initSheetDrag() {
+    const sh = $('#sheet'), g = $('#grab');
+    const order = ['small', 'medium', 'large'];
+    let y0 = 0, h0 = 0, moved = false;
+    const settle = (d) => {
+      setDetent(d);
+      setTimeout(() => { declutter(); if (state.res && state.res.cards && d !== 'large') fitToResults(); }, 420);
+    };
+    g.addEventListener('click', () => {
+      if (moved) { moved = false; return; }
+      settle(order[(order.indexOf(state.detent) + 1) % order.length]);
+    });
+    g.addEventListener('pointerdown', (e) => {
+      y0 = e.clientY;
+      h0 = sh.getBoundingClientRect().height;
+      moved = false;
+      g.setPointerCapture(e.pointerId);
+      sh.classList.add('dragging');
+    });
+    g.addEventListener('pointermove', (e) => {
+      if (!g.hasPointerCapture(e.pointerId)) return;
+      const dy = e.clientY - y0;
+      if (Math.abs(dy) > 4) moved = true;
+      sh.style.setProperty('--sheet-h', Math.max(120, Math.min(window.innerHeight - 40, h0 - dy)) + 'px');
+    });
+    const up = () => {
+      sh.classList.remove('dragging');
+      if (!moved) return;
+      const h = sh.getBoundingClientRect().height;
+      settle(order.reduce((a, d) => (Math.abs(detentPx(d) - h) < Math.abs(detentPx(a) - h) ? d : a), 'medium'));
+    };
+    g.addEventListener('pointerup', up);
+    g.addEventListener('pointercancel', up);
+    g.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp') { e.preventDefault(); settle(order[Math.min(2, order.indexOf(state.detent) + 1)]); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); settle(order[Math.max(0, order.indexOf(state.detent) - 1)]); }
+    });
   }
 
   /* ------------------------------------------------------------ events */
   function bindEvents() {
-    $$('.lang-btn').forEach((b) => b.addEventListener('click', () => {
-      state.lang = b.dataset.lang;
-      LS.set(KEYS.lang, state.lang);
-      applyLang();
-    }));
-
-    $('#btn-locate').addEventListener('click', locate);
-    initFromSearch();
-    $('#btn-mappick').addEventListener('click', () => {
-      showMapNote('map_pick_hint', 5000);
-      if (mobileMQ.matches) window.scrollTo({top: 0, behavior: motionOK() ? 'smooth' : 'auto'});
+    const q = $('#q');
+    const startPick = () => {
+      state.pickMode = true;
+      closePanel(true);
+      renderMapChip();
+      showMapNote('map_pick_hint', 6000);
+      if (mobileMQ.matches) setDetent('small');
+    };
+    $('#req-form').addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+    q.addEventListener('input', () => { $('#q-clear').hidden = !q.value; });
+    q.addEventListener('focus', () => {
+      if (state.view === 'results') showView('form');
+      if (mobileMQ.matches && state.detent !== 'large') setDetent('large');
     });
-    $('#landmark').addEventListener('change', (e) => {
-      const v = e.target.value;
-      if (v === '') return;
-      const l = state.landmarks[+v];
-      if (l) setOrigin({lat: l.lat, lon: l.lon, source: 'landmark', lm: +v});
+    $('#q-clear').addEventListener('click', () => { q.value = ''; $('#q-clear').hidden = true; showView('form'); q.focus(); });
+    $('#btn-settings').addEventListener('click', () => openPanel({kind: 'settings'}));
+    $('#btn-theme').addEventListener('click', () => {
+      state.theme = themeNow() === 'dark' ? 'light' : 'dark';
+      LS.set(KEYS.theme, state.theme);
+      applyTheme();
+      if (state.panel && state.panel.kind === 'settings') renderPanel();
     });
+    ['#btn-locate-top', '#btn-locate-desk', '#btn-locate'].forEach((s) => $(s).addEventListener('click', locate));
+    $('#btn-zin').addEventListener('click', () => { if (map) map.zoomIn(); });
+    $('#btn-zout').addEventListener('click', () => { if (map) map.zoomOut(); });
+    $('#btn-mappick').addEventListener('click', startPick);
+    $('#btn-find').addEventListener('click', () => openPanel({kind: 'from'}));
+    $('#where-line').addEventListener('click', (e) => { if (e.target.closest('[data-act="from"]')) openPanel({kind: 'from'}); });
 
-    $('#time-chips').addEventListener('click', (e) => {
+    // the request
+    $('#quick').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-quick]');
+      if (!b) return;
+      const item = t('quick')[+b.dataset.quick];
+      q.value = item[2];
+      $('#q-clear').hidden = false;
+      submit();
+    });
+    $('#time-seg').addEventListener('click', (e) => {
       const b = e.target.closest('[data-time]');
       if (!b) return;
       const m = +b.dataset.time;
       state.chips.time = state.chips.time === m ? null : m;
-      syncChipsUI(); saveChips(); renderSummary();
+      syncChipsUI(); saveChips();
     });
     $('#group-seg').addEventListener('click', (e) => {
       const b = e.target.closest('[data-group]');
       if (!b) return;
       state.chips.group = +b.dataset.group;
-      syncChipsUI(); saveChips(); renderSummary();
+      syncChipsUI(); saveChips();
     });
-    $('#interest-chips').addEventListener('click', (e) => {
+    $('#interest-caps').addEventListener('click', (e) => {
       const b = e.target.closest('[data-interest]');
       if (!b) return;
       const id = b.dataset.interest;
       const list = state.chips.interests;
       state.chips.interests = list.includes(id) ? list.filter((x) => x !== id) : list.concat(id);
-      syncChipsUI(); saveChips(); renderSummary();
+      syncChipsUI(); saveChips();
     });
-    $('#chip-kids').addEventListener('click', () => { state.chips.kids = !state.chips.kids; syncChipsUI(); saveChips(); renderSummary(); });
-    $('#chip-wheel').addEventListener('click', () => { state.chips.wheel = !state.chips.wheel; syncChipsUI(); saveChips(); renderSummary(); });
-    $('#noai').addEventListener('change', (e) => { state.noAi = e.target.checked; saveChips(); renderSummary(); });
-    $('#noai-info-btn').addEventListener('click', (e) => {
-      const pop = $('#noai-info');
-      pop.hidden = !pop.hidden;
-      e.currentTarget.setAttribute('aria-expanded', String(!pop.hidden));
-    });
+    $('#sw-kids').addEventListener('click', () => { state.chips.kids = !state.chips.kids; syncChipsUI(); saveChips(); });
+    $('#sw-wheel').addEventListener('click', () => { state.chips.wheel = !state.chips.wheel; syncChipsUI(); saveChips(); });
+    $('#btn-go').addEventListener('click', () => submit());
+    $('#btn-edit').addEventListener('click', () => { showView('form'); if (mobileMQ.matches) setDetent('large'); });
 
-    $('#examples').addEventListener('click', (e) => {
-      const b = e.target.closest('.ex-btn');
-      if (!b) return;
-      $('#q').value = b.textContent;
-      $('#q').focus();
-      renderSummary();
-    });
-    $('#q').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
-    });
-    $('#q').addEventListener('input', renderSummary);
-
-    // simulator
-    $('#sim-on').addEventListener('change', (e) => {
-      state.sim.on = e.target.checked;
-      if (state.sim.on && !state.sim.dt) state.sim.dt = nowLocalInput();
-      syncSimUI(); renderSummary();
-    });
-    const simInput = (fn) => (e) => { fn(e.target); state.sim.on = true; if (!state.sim.dt) state.sim.dt = nowLocalInput(); syncSimUI(); renderSummary(); };
-    $('#sim-dt').addEventListener('change', simInput((el) => { state.sim.dt = el.value; }));
-    $('#sim-temp').addEventListener('input', simInput((el) => { state.sim.temp = +el.value; }));
-    $('#sim-wind').addEventListener('input', simInput((el) => { state.sim.wind = +el.value; }));
-    $('#sim-precip').addEventListener('change', simInput((el) => { state.sim.precip = el.checked; }));
-    $$('[data-preset]').forEach((b) => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
-
-    $('#req-form').addEventListener('submit', (e) => { e.preventDefault(); submit(); });
-    $('#panel').addEventListener('click', (e) => {
-      if (e.target.closest('#btn-edit')) { expandForm(true); return; }
+    // the answer: open a place, show it on the map, how I chose, retry
+    $('#view-results').addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]');
-      if (act && act.dataset.act === 'retry') { submit(); return; }
-      if (act && act.dataset.act === 'example') {
+      if (!act) return;
+      const a = act.dataset.act;
+      const holder = act.closest('[data-idx]');
+      const i = holder ? +holder.dataset.idx : -1;
+      if (a === 'retry') { submit(); return; }
+      if (a === 'example') {
         setOrigin({lat: SAMPLE_ORIGIN.lat, lon: SAMPLE_ORIGIN.lon, source: 'sample'}, {fly: false});
         submit({mock: true});
         return;
       }
-    });
-
-    // cards: feedback, "on map", timeline buttons
-    $('#cards').addEventListener('click', (e) => {
-      const li = e.target.closest('.card');
-      if (!li || li.classList.contains('skeleton')) return;
-      const i = +li.dataset.idx;
-      const fb = e.target.closest('[data-fb]');
-      if (fb) { sendFeedback(li.dataset.poi, fb.dataset.fb); return; }
-      if (e.target.closest('[data-act="map"]')) { selectCard(i, {fly: true, showMap: true}); return; }
-      if (e.target.closest('.card-title')) selectCard(i, {fly: true});
+      if (a === 'trace') { openPanel({kind: 'trace'}); return; }
+      if (a === 'open' && i >= 0) { selectCard(i, {open: true, fly: true}); return; }
+      if (a === 'map' && i >= 0) { selectCard(i, {fly: true}); if (mobileMQ.matches) setDetent('small'); }
     });
     $('#cards').addEventListener('mouseover', (e) => {
-      const li = e.target.closest('.card');
-      poiMarkers.forEach((m, j) => { if (m) m.getElement().classList.toggle('is-hover', !!li && +li.dataset.idx === j); });
+      const el = e.target.closest('[data-idx]');
+      poiMarkers.forEach((m, j) => { if (m) m.getElement().classList.toggle('is-hover', !!el && +el.dataset.idx === j); });
     });
-    $('#cards').addEventListener('mouseleave', () => {
-      poiMarkers.forEach((m) => { if (m) m.getElement().classList.remove('is-hover'); });
-    });
-    $('#route').addEventListener('click', (e) => {
-      const b = e.target.closest('.tl-btn');
-      if (!b || b.dataset.idx === '') return;
-      selectCard(+b.dataset.idx, {fly: true, scrollCard: true});
-    });
+    $('#cards').addEventListener('mouseleave', () => { poiMarkers.forEach((m) => { if (m) m.getElement().classList.remove('is-hover'); }); });
 
-    // footer
-    $('#btn-delete').addEventListener('click', deleteMyData);
-    const dlg = $('#about-dialog');
-    $('#btn-about').addEventListener('click', () => {
-      if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    // the second column
+    const p2 = $('#panel2');
+    const simTouch = () => { state.sim.on = true; if (!state.sim.dt) state.sim.dt = nowLocalInput(); syncSimUI(); };
+    p2.addEventListener('click', (e) => {
+      const lang = e.target.closest('[data-lang]');
+      if (lang) { state.lang = lang.dataset.lang; LS.set(KEYS.lang, state.lang); applyLang(); return; }
+      const th = e.target.closest('[data-theme-opt]');
+      if (th) { state.theme = th.dataset.themeOpt; LS.set(KEYS.theme, state.theme); applyTheme(); renderPanel(); return; }
+      const fb = e.target.closest('[data-fb]');
+      if (fb) { sendFeedback(fb.dataset.poi, fb.dataset.fb); return; }
+      const sug = e.target.closest('[data-sug]');
+      if (sug && state.fromItems) {
+        const it = state.fromItems[+sug.dataset.sug];
+        if (it) setOrigin({lat: it.lat, lon: it.lon, source: 'search', label: it.name});
+        return;
+      }
+      const lm = e.target.closest('[data-lm]');
+      if (lm) {
+        const l = state.landmarks[+lm.dataset.lm];
+        if (l) setOrigin({lat: l.lat, lon: l.lon, source: 'landmark', lm: +lm.dataset.lm});
+        return;
+      }
+      const pre = e.target.closest('[data-preset]');
+      if (pre) { applyPreset(pre.dataset.preset); return; }
+      if (e.target.closest('#from-clear')) { const inp = $('#from-q'); inp.value = ''; onFromInput(inp); inp.focus(); return; }
+      const sw = e.target.closest('.sw');
+      if (sw) {
+        if (sw.id === 'sw-noai') { state.noAi = !state.noAi; saveChips(); syncChipsUI(); }
+        if (sw.id === 'sim-on') { state.sim.on = !state.sim.on; if (state.sim.on && !state.sim.dt) state.sim.dt = nowLocalInput(); syncSimUI(); }
+        if (sw.id === 'sim-precip') { state.sim.precip = !state.sim.precip; simTouch(); }
+        return;
+      }
+      const act = e.target.closest('[data-act]');
+      if (!act) return;
+      const a = act.dataset.act;
+      if (a === 'close') closePanel();
+      else if (a === 'settings') openPanel({kind: 'settings'});
+      else if (a === 'about') openPanel({kind: 'about'});
+      else if (a === 'delete') deleteMyData();
+      else if (a === 'locate') locate();
+      else if (a === 'pick') startPick();
+      else if (a === 'map') {
+        const i = +act.dataset.idx;
+        closePanel(true);
+        selectCard(i, {fly: true});
+        if (mobileMQ.matches) setDetent('small');
+      }
     });
-    $('#about-close').addEventListener('click', () => dlg.close ? dlg.close() : dlg.removeAttribute('open'));
-    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    p2.addEventListener('input', (e) => {
+      const el = e.target;
+      if (el.id === 'from-q') onFromInput(el);
+      else if (el.id === 'sim-temp') { state.sim.temp = +el.value; simTouch(); }
+      else if (el.id === 'sim-wind') { state.sim.wind = +el.value; simTouch(); }
+    });
+    p2.addEventListener('change', (e) => { if (e.target.id === 'sim-dt') { state.sim.dt = e.target.value; simTouch(); } });
+    p2.addEventListener('keydown', (e) => {
+      if (e.target.id === 'from-q' && e.key === 'Enter') {
+        e.preventDefault();
+        const it = state.fromItems && state.fromItems[0];
+        if (it) setOrigin({lat: it.lat, lon: it.lon, source: 'search', label: it.name});
+      }
+    });
+    $('#scrim').addEventListener('click', () => closePanel());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.panel) closePanel(); });
 
+    const onScheme = () => { if (state.theme === 'auto') applyTheme(); };
+    if (darkMQ.addEventListener) darkMQ.addEventListener('change', onScheme);
+    window.addEventListener('resize', () => { setDetent(state.detent); declutter(); });
+    initSheetDrag();
     setInterval(() => placeholderTick(false), 3800);
   }
 
@@ -1806,30 +2239,41 @@
     setOrigin({lat: SAMPLE_ORIGIN.lat, lon: SAMPLE_ORIGIN.lon, source: 'sample'}, {fly: false});
     // pre-fill the request that matches the recorded answer (not saved to storage)
     $('#q').value = t('sample_text');
+    $('#q-clear').hidden = false;
     state.chips.time = 120;
     state.chips.kids = true;
     state.chips.group = 2;
     syncChipsUI();
-    renderSummary();
   }
 
   function init() {
     state.lang = initialLang();
+    const th = LS.get(KEYS.theme);
+    state.theme = th === 'light' || th === 'dark' ? th : 'auto';
+    if (params.get('theme') === 'dark' || params.get('theme') === 'light') state.theme = params.get('theme');
     loadChips();
     state.sessionId = LS.get(KEYS.session);
     state.sim.dt = nowLocalInput();
+    applyTheme();
     buildStaticUI();
     applyLang();
     bindEvents();
+    showView('form');
+    setDetent(params.get('detent') || 'medium');
     initMap();
     if (state.mock) setupMock();
     else loadLandmarks();
     if (map && state.origin) {
       map.once('load', () => {
         updateOriginOnMap(false);
-        map.jumpTo({center: [state.origin.lon, state.origin.lat], zoom: mobileMQ.matches ? 13.4 : 14});
+        if (state.res && state.res.cards) fitToResults();   // the answer may arrive before the map has loaded
+        else map.easeTo({center: [state.origin.lon, state.origin.lat], zoom: mobileMQ.matches ? 14.5 : 15, offset: freeOffset(), duration: 0});
       });
     }
+    // ?panel=settings|about|from opens a page; ?mock=1&auto=1 plays the recorded answer (demos and screenshots)
+    const pp = params.get('panel');
+    if (pp && ['settings', 'about', 'from'].includes(pp)) openPanel({kind: pp});
+    if (state.mock && params.get('auto') === '1') setTimeout(() => submit(), 400);
   }
 
   init();
