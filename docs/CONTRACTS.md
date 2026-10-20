@@ -17,7 +17,7 @@ Entrypoint `python -m seruen.run`, role chosen by the env var `SERVICE` (service
 
 | name | endpoints |
 |---|---|
-| `orchestrator` | `POST /api/recommend` (SSE), `GET /api/landmarks`, `POST /api/feedback`, `DELETE /api/session/{id}`, `GET /api/health`, serves `web/` at `/` |
+| `orchestrator` | `POST /api/recommend` (SSE), `POST /api/transcribe?lang=ru|kk|en` (raw audio body ≤ 1.9 MB → `{ok, text, model}`), `GET /api/where`, `GET /api/suggest`, `GET /api/landmarks`, `POST /api/feedback`, `DELETE /api/session/{id}`, `GET /api/health`, serves `web/` at `/` |
 | `session` | `POST /v1/session/get`, `POST /v1/session/put`, `DELETE /v1/session/{id}` (Redis, TTL 30 min) |
 | `context` | `POST /v1/context {cell, sim}` → `Context` |
 | `nlu` | `POST /v1/parse {text, chips, lang, prev}` → `Constraints` |
@@ -26,7 +26,7 @@ Entrypoint `python -m seruen.run`, role chosen by the env var `SERVICE` (service
 | `routing` | `POST /v1/route` → walking minutes per POI and the mini-route (≤ 3 stops) |
 | `explain` | `POST /v1/explain` → `Explanation[]` (LLM call 2, enum of candidate ids) |
 | `guard` | `POST /v1/check` → validated explanations or template fallback |
-| `llm-gateway` | `POST /v1/complete`, `POST /v1/embed` (OpenAI; budget, retries, Redis cache) |
+| `llm-gateway` | `POST /v1/complete`, `POST /v1/embed` (OpenAI; budget, retries, Redis cache), `POST /v1/transcribe {audio_b64, mime, lang, prompt}` (speech → text: `gpt-4o-transcribe`, fallback `whisper-1`; daily cap; the audio is never cached or stored) |
 | `catalog-api` | `GET /v1/poi/{id}`, `GET /v1/poi?ids=` (PostgreSQL) |
 | `events-api` | `GET /v1/events?lat=&lon=&radius_m=&from=&to=` |
 | `feedback-api` | `POST /v1/feedback {poi_id, kind, cell}` → Kafka `feedback` |

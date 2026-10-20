@@ -5,6 +5,7 @@ Budget: 8 s for the whole AI part; if the model is late or wrong, the template t
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import time
 import uuid
@@ -363,11 +364,39 @@ async def landmarks(p: dict) -> dict:
     return {"items": _landmarks()}
 
 
+# vocabulary hints for speech-to-text: place names the model should spell the way Astana does
+VOICE_HINT = {
+    "ru": "Прогулка по Астане: Хан Шатыр, Байтерек, Керуен, ЭКСПО, Мега Силк Уэй, Нурлы Жол, Астана Опера, кофе, с ребёнком, до вылета.",
+    "kk": "Астанада серуен: Хан Шатыр, Бәйтерек, Керуен, ЭКСПО, Мега Силк Уэй, Нұрлы Жол, кофе, баламен, ұшар алдында.",
+    "en": "A walk in Astana: Khan Shatyr, Baiterek, Keruen, EXPO, Mega Silk Way, Nurly Zhol, Astana Opera, coffee, with kids, before my flight.",
+}
+MAX_VOICE_BYTES = 1_900_000        # ~30 s of speech; the ingress allows 2 MB
+
+
 def extra(app: FastAPI) -> None:
     @app.post("/api/recommend")
     async def recommend(req: RecommendRequest):
         return StreamingResponse(recommend_stream(req), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.post("/api/transcribe")
+    async def api_transcribe(request: Request, lang: str = "ru"):
+        """Voice → text for the search field. The audio goes to OpenAI only to be transcribed and is not kept."""
+        body = await request.body()
+        if not body:
+            return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+        if len(body) > MAX_VOICE_BYTES:
+            return JSONResponse({"ok": False, "error": "too_large"}, status_code=413)
+        lang = lang if lang in VOICE_HINT else "ru"
+        payload = {"audio_b64": base64.b64encode(body).decode(), "mime": request.headers.get("content-type", "audio/webm"),
+                   "lang": lang, "prompt": VOICE_HINT[lang]}
+        try:
+            r = await call("llm-gateway", "/v1/transcribe", payload, timeout=25)
+        except ServiceError:
+            return JSONResponse({"ok": False, "error": "unavailable"}, status_code=503)
+        if not r.get("ok"):
+            return JSONResponse({"ok": False, "error": r.get("error", "failed")}, status_code=502)
+        return {"ok": True, "text": (r.get("text") or "")[:400], "model": r.get("model"), "latency_ms": r.get("latency_ms")}
 
     @app.get("/api/where")
     async def api_where(cell: str):

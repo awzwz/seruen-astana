@@ -438,3 +438,19 @@ button.cap[aria-pressed="true"]::before { content: "✓"; font-weight: 700; marg
 .modes.one { grid-template-columns: 1fr; }
 body.no-map #map { background: var(--map-bg); }
 .view > div:empty { display: none; }
+
+/* voice input: a microphone in the search capsule (iOS dictation) */
+.mic { width: 32px; height: 32px; flex: none; border: 0; border-radius: 50%; background: none; color: var(--label-2); display: grid; place-items: center; padding: 0; margin-right: -4px;
+  transition: background .2s, color .2s, box-shadow .08s linear; }
+.mic .ic { width: 20px; height: 20px; }
+.mic:hover { color: var(--tint-text); }
+.mic.rec { background: var(--red); color: #fff; box-shadow: 0 0 0 calc(3px + var(--lvl, 0) * 9px) color-mix(in srgb, var(--red) 28%, transparent); }
+.mic.rec .ic { width: 14px; height: 14px; }
+.mic.busy { color: var(--tint-text); }
+.mic:disabled { cursor: default; }
+.search.rec { box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 40%, transparent); }
+.search.rec input::placeholder { color: var(--red); }
+.voice-msg { display: flex; gap: 6px; align-items: flex-start; margin: 8px 4px 0; font: var(--t-foot); color: var(--label-2); }
+.voice-msg .ic { color: var(--purple); margin-top: 1px; }
+.voice-msg.warn .ic { color: var(--orange); }
+.voice-msg.warn { color: var(--label); }

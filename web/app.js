@@ -143,7 +143,9 @@
     globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.5 3.5 5.5 3.5 8.5s-1 6-3.5 8.5c-2.5-2.5-3.5-5.5-3.5-8.5s1-6 3.5-8.5z"/>',
     brain: '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.5A3 3 0 0 0 8 18.5a2.5 2.5 0 0 0 4 1V5a2.5 2.5 0 0 0-3-.5zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.5A3 3 0 0 1 16 18.5a2.5 2.5 0 0 1-4 1"/>',
     scale: '<path d="M12 4v16M7 20h10M4 8h16M6.5 8l-3 6a3 3 0 0 0 6 0zM17.5 8l-3 6a3 3 0 0 0 6 0z"/>',
-    shield: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>'
+    shield: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    mic: '<rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>',
+    stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="2.4" fill="currentColor" stroke="none"/>'
   };
   function icon(name, cls) {
     const body = ICONS[name] || ICONS.info;
@@ -174,6 +176,7 @@
     originMsgKey: null,
     formMsgKey: null,
     statusText: '',
+    voiceUsed: false,      // the current request was spoken (shown in «Куда ушли данные»)
     view: 'form',          // form | results
     panel: null,           // the second column: {kind: detail|trace|settings|about|from, idx?}
     detent: 'medium',      // phone sheet: small | medium | large
@@ -306,6 +309,8 @@
 
   /* ------------------------------------------------------------ storage */
   function initialLang() {
+    const pl = params.get('lang');   // ?lang=kk|en|ru for demo links
+    if (pl && L[pl]) return pl;
     const saved = LS.get(KEYS.lang);
     if (saved && L[saved]) return saved;
     // Russian by default (the city's lingua franca); Kazakh if the browser asks for it; English via the switch
@@ -404,7 +409,8 @@
     $('#btn-zin').setAttribute('aria-label', t('zoom_in'));
     $('#btn-zout').setAttribute('aria-label', t('zoom_out'));
     ['#btn-locate-top', '#btn-locate-desk'].forEach((s) => $(s).setAttribute('aria-label', t('my_location')));
-    placeholderTick(true);
+    if (voice.state === 'idle') placeholderTick(true);
+    renderMic();
     renderOrigin();
     syncChipsUI();
     renderMsgs();
@@ -421,7 +427,7 @@
     const q = $('#q');
     const list = [t('search_ph')].concat(t('placeholders'));
     if (reset) phIdx = 0;
-    else if (document.activeElement === q || q.value) return;
+    else if (document.activeElement === q || q.value || voice.state !== 'idle') return;
     else phIdx = (phIdx + 1) % list.length;
     q.placeholder = list[phIdx];
   }
@@ -1276,7 +1282,8 @@
   /* ------------------------------------------------------------ results rendering */
   function startResults(isMock) {
     state.res = {mock: isMock, noAi: state.noAi, t0: performance.now(), context: null, constraints: null, cards: null,
-      route: null, origin: null, texts: {}, trace: null, done: null, errorView: null, elapsed: null};
+      route: null, origin: null, texts: {}, trace: null, done: null, errorView: null, elapsed: null, voice: !!state.voiceUsed};
+    state.voiceUsed = false;
     state.feedback = {};
     state.activeIdx = -1;
     closePanel(true);
@@ -1715,6 +1722,7 @@
           '<span class="stepbar" style="--c:' + tl[1] + '"><i style="width:' + pct.toFixed(1) + '%"></i></span></span><span class="tr num">' + esc(fmtDur(s.ms)) + '</span></div>';
       }).join('') + '</div>' +
       '<section class="sec"><div class="sec-h"><h3>' + esc(t('data_flows')) + '</h3></div><div class="list tiles">' +
+      (r.voice ? '<div class="row top">' + tile('mic', 'var(--red)') + '<span class="t">' + esc(t('flows_voice')) + '<span class="s">' + esc(t('flows_voice_text')) + '</span></span><span></span></div>' : '') +
       '<div class="row top">' + tile('sparkle', 'var(--purple)') + '<span class="t">' + esc(t('flows_ai')) + ul(tr.sent_to_llm) + '</span><span></span></div>' +
       '<div class="row top">' + tile('map', 'var(--tint)') + '<span class="t">' + esc(t('flows_2gis')) + '<span class="s">' + esc(t('flows_2gis_text')) + '</span></span><span></span></div>' +
       '<div class="row top">' + tile('lock', 'var(--gray)') + '<span class="t">' + esc(t('nowhere')) + ul(tr.not_sent) + '</span><span></span></div></div>' +
@@ -1907,6 +1915,7 @@
         '<div class="row">' + tile('lock', 'var(--blue)') + '<span class="t">' + esc(t('server_sees')) + '<span class="s">' + esc(t('server_sees_val')) +
           (state.cell ? ' · <code>' + esc(state.cell) + '</code>' : '') + '</span></span><span></span></div>' +
         '<div class="row">' + tile('clock', 'var(--indigo)') + '<span class="t">' + esc(t('session_row')) + '</span><span class="tr">' + esc(t('session_val')) + '</span></div>' +
+        '<div class="row">' + tile('mic', 'var(--red)') + '<span class="t">' + esc(t('flows_voice')) + '<span class="s">' + esc(t('flows_voice_text')) + '</span></span><span></span></div>' +
         '<button type="button" class="row danger" data-act="delete">' + tile('trash', 'var(--red)') + '<span class="t">' + esc(t('delete')) + '</span><span></span></button></div>' +
         '<div class="form-msg" id="delete-msg" role="status"></div>' +
         '<p class="sec-f">' + esc(t('privacy_foot')) + '</p></section>' +
@@ -2021,6 +2030,154 @@
     syncSimUI();
   }
 
+  /* ------------------------------------------------------------ voice input: speech → text (OpenAI), the audio is not kept */
+  const VOICE_MAX_MS = 30000;        // the server takes ~30 s of speech
+  const VOICE_SILENCE_MS = 1600;     // a pause after speech ends the recording, like iOS dictation
+  const VOICE_MIN_MS = 700;
+  // Whisper-style hallucinations on silence or noise: never put them into the search field
+  const VOICE_JUNK = /субтитр|продолжение следует|спасибо за просмотр|подписывайтесь|thanks for watching|subtitles by/i;
+  const voice = {state: 'idle', rec: null, stream: null, ctx: null, chunks: [], mime: '', t0: 0, timer: null, raf: 0, heard: false, quietSince: 0, cancelled: false};
+
+  function voiceSupported() {
+    return !state.mock && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  }
+  function pickMime() {
+    for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']) {
+      try { if (window.MediaRecorder.isTypeSupported(m)) return m; } catch (e) { /* older Safari */ }
+    }
+    return '';
+  }
+  function setVoiceMsg(key, tone) {
+    const el = $('#voice-msg');
+    if (!key) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    el.className = 'voice-msg' + (tone ? ' ' + tone : '');
+    el.innerHTML = icon(tone === 'warn' ? 'alert' : 'sparkle') + '<span>' + esc(t(key)) + '</span>';
+  }
+  function renderMic() {
+    const b = $('#btn-mic');
+    b.hidden = !voiceSupported();
+    b.classList.toggle('rec', voice.state === 'rec');
+    b.classList.toggle('busy', voice.state === 'busy');
+    b.innerHTML = voice.state === 'rec' ? icon('stop') : voice.state === 'busy' ? spinner() : icon('mic');
+    b.setAttribute('aria-label', t(voice.state === 'rec' ? 'voice_stop' : 'voice_start'));
+    b.setAttribute('title', t(voice.state === 'rec' ? 'voice_stop' : 'voice_start'));
+    b.setAttribute('aria-pressed', String(voice.state === 'rec'));
+    b.disabled = voice.state === 'busy';
+    $('#req-form .search').classList.toggle('rec', voice.state === 'rec');
+  }
+  async function voiceToggle() {
+    if (voice.state === 'rec') { voiceStop(false); return; }
+    if (voice.state !== 'idle') return;
+    if (!window.isSecureContext) { setVoiceMsg('voice_insecure', 'warn'); return; }
+    // the level meter's AudioContext must start inside the tap itself (Safari and Chrome autoplay rules)
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      voice.ctx = new AC();
+      if (voice.ctx.resume) voice.ctx.resume();
+    } catch (e) { voice.ctx = null; }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, channelCount: 1}});
+    } catch (e) {
+      voiceCleanup();
+      setVoiceMsg(e && (e.name === 'NotAllowedError' || e.name === 'SecurityError') ? 'voice_denied' : 'voice_nomic', 'warn');
+      return;
+    }
+    Object.assign(voice, {stream: stream, chunks: [], mime: pickMime(), heard: false, quietSince: 0, cancelled: false});
+    try {
+      voice.rec = new window.MediaRecorder(stream, voice.mime ? {mimeType: voice.mime, audioBitsPerSecond: 48000} : undefined);
+    } catch (e) {
+      voiceCleanup();
+      setVoiceMsg('voice_error', 'warn');
+      return;
+    }
+    voice.rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) voice.chunks.push(ev.data); };
+    voice.rec.onstop = voiceSend;
+    voice.rec.start(250);
+    voice.t0 = performance.now();
+    voice.state = 'rec';
+    renderMic();
+    setVoiceMsg('voice_note');
+    voiceMeter(stream);
+    voice.timer = setInterval(voiceTick, 200);
+    voiceTick();
+  }
+  function voiceTick() {
+    const ms = performance.now() - voice.t0;
+    const s = Math.floor(ms / 1000);
+    $('#q').placeholder = t('voice_listening', {s: Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')});
+    if (ms >= VOICE_MAX_MS) voiceStop(false);
+    else if (voice.heard && voice.quietSince && performance.now() - voice.quietSince > VOICE_SILENCE_MS && ms > VOICE_MIN_MS) voiceStop(false);
+  }
+  // live level for the pulsing button + end-of-speech detection
+  function voiceMeter(stream) {
+    try {
+      if (!voice.ctx) return;
+      const an = voice.ctx.createAnalyser();
+      an.fftSize = 512;
+      voice.ctx.createMediaStreamSource(stream).connect(an);
+      const buf = new Uint8Array(an.fftSize);
+      const b = $('#btn-mic');
+      const loop = () => {
+        an.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+        const rms = Math.sqrt(sum / buf.length);
+        b.style.setProperty('--lvl', Math.min(1, rms * 7).toFixed(2));
+        if (rms > 0.035) { voice.heard = true; voice.quietSince = 0; }
+        else if (voice.heard && !voice.quietSince) voice.quietSince = performance.now();
+        voice.raf = requestAnimationFrame(loop);
+      };
+      loop();
+    } catch (e) { /* no meter: the manual stop and the 30 s limit still work */ }
+  }
+  function voiceStop(cancel) {
+    if (voice.state !== 'rec') return;
+    voice.cancelled = !!cancel;
+    voice.state = 'busy';
+    clearInterval(voice.timer);
+    cancelAnimationFrame(voice.raf);
+    renderMic();
+    $('#q').placeholder = t('voice_working');
+    setVoiceMsg(cancel ? null : 'voice_working');
+    try { voice.rec.stop(); } catch (e) { voiceSend(); }
+  }
+  function voiceCleanup() {
+    clearInterval(voice.timer);
+    cancelAnimationFrame(voice.raf);
+    if (voice.stream) voice.stream.getTracks().forEach((tr) => tr.stop());
+    if (voice.ctx) { try { voice.ctx.close(); } catch (e) { /* already closed */ } }
+    voice.stream = null;
+    voice.ctx = null;
+    $('#btn-mic').style.removeProperty('--lvl');
+  }
+  async function voiceSend() {
+    const chunks = voice.chunks;
+    const type = ((voice.rec && voice.rec.mimeType) || voice.mime || 'audio/webm').split(';')[0];
+    const dur = performance.now() - voice.t0;
+    voice.chunks = [];
+    voice.rec = null;
+    voiceCleanup();
+    const finish = (key) => { voice.state = 'idle'; renderMic(); placeholderTick(true); setVoiceMsg(key, key ? 'warn' : ''); };
+    if (voice.cancelled) { finish(null); return; }
+    const blob = new Blob(chunks, {type: type});
+    if (!blob.size || dur < 400) { finish('voice_empty'); return; }
+    try {
+      const r = await fetch('/api/transcribe?lang=' + encodeURIComponent(state.lang), {method: 'POST', headers: {'Content-Type': type}, body: blob});
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j || !j.ok) { finish('voice_error'); return; }
+      const text = String(j.text || '').trim();
+      if (text.replace(/[\s.,!?…-]/g, '').length < 2 || VOICE_JUNK.test(text)) { finish('voice_empty'); return; }
+      finish(null);
+      const q = $('#q');
+      q.value = text;
+      $('#q-clear').hidden = false;
+      state.voiceUsed = true;     // shown in «Как я выбирал → Куда ушли данные»
+      submit();
+    } catch (e) { finish('voice_error'); }
+  }
+
   /* ------------------------------------------------------------ phone sheet: detents + drag (desktop: a fixed panel) */
   const DETENTS = {small: 168, medium: 0.52, large: 0.9};
   function detentPx(d) {
@@ -2085,7 +2242,9 @@
       if (mobileMQ.matches) setDetent('small');
     };
     $('#req-form').addEventListener('submit', (e) => { e.preventDefault(); submit(); });
-    q.addEventListener('input', () => { $('#q-clear').hidden = !q.value; });
+    q.addEventListener('input', () => { $('#q-clear').hidden = !q.value; state.voiceUsed = false; });
+    $('#btn-mic').addEventListener('click', (e) => { e.preventDefault(); voiceToggle(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) voiceStop(true); });
     q.addEventListener('focus', () => {
       if (state.view === 'results') showView('form');
       if (mobileMQ.matches && state.detent !== 'large') setDetent('large');
@@ -2226,7 +2385,11 @@
       }
     });
     $('#scrim').addEventListener('click', () => closePanel());
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.panel) closePanel(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (voice.state === 'rec') voiceStop(true);
+      else if (state.panel) closePanel();
+    });
 
     const onScheme = () => { if (state.theme === 'auto') applyTheme(); };
     if (darkMQ.addEventListener) darkMQ.addEventListener('change', onScheme);

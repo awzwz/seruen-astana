@@ -1,11 +1,14 @@
 """LLM gateway: the only place that talks to OpenAI. Budget, cache, retries, usage accounting.
 
+Voice input (/v1/transcribe) also goes through here: the audio is transcribed and dropped — never stored, cached or logged.
+
 What is sent is decided by the callers and recorded in the trace: a cell-free text, filters, tags and
 facts about candidate places. Never coordinates, never a user id.
 """
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import time
 from datetime import date
@@ -95,3 +98,52 @@ async def embed(p: dict) -> dict:
             out[i] = vec
             jset(kv(1), "emb:" + _key(s.embed_model, s.embed_dim, texts[i]), vec, ex=7 * 86400)
     return {"vectors": out, "model": s.embed_model}
+
+
+AUDIO_EXT = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "mp4", "audio/x-m4a": "m4a", "audio/m4a": "m4a",
+             "audio/aac": "m4a", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/x-wav": "wav"}
+MAX_AUDIO_BYTES = 4 * 1024 * 1024
+
+
+def _stt_quota_ok() -> bool:
+    k = f"stt:count:{date.today().isoformat()}"
+    return kv(1).incrby(k, 1, ex=2 * 86400) <= settings().stt_daily_limit
+
+
+@endpoint("llm-gateway", "/v1/transcribe")
+async def transcribe(p: dict) -> dict:
+    """p = {audio_b64, mime, lang?, prompt?} → {ok, text, model, latency_ms}.
+
+    Voice → text for the search field. The audio lives only in this call: no cache, no storage, no logs.
+    """
+    s = settings()
+    try:
+        audio = base64.b64decode(p.get("audio_b64") or "", validate=True)
+    except Exception:
+        return {"ok": False, "error": "bad_audio"}
+    if not audio or len(audio) > MAX_AUDIO_BYTES:
+        return {"ok": False, "error": "bad_audio"}
+    if not _stt_quota_ok():
+        return {"ok": False, "error": "budget_exceeded"}
+    mime = str(p.get("mime") or "audio/webm").split(";")[0].strip().lower()
+    ext = AUDIO_EXT.get(mime, "webm")
+    lang = p.get("lang") if p.get("lang") in ("ru", "kk", "en") else None
+    t = time.perf_counter()
+    last_error = "failed"
+    for model in (s.stt_model, s.stt_fallback_model):
+        kwargs = {"model": model, "file": ("speech." + ext, audio, mime)}
+        if lang:
+            kwargs["language"] = lang
+        if p.get("prompt"):
+            kwargs["prompt"] = str(p["prompt"])[:400]
+        try:
+            r = await asyncio.wait_for(client().audio.transcriptions.create(**kwargs), timeout=s.stt_timeout)
+        except asyncio.TimeoutError:
+            last_error = "timeout"
+            break                      # a second model would only make the person wait longer
+        except Exception as e:
+            last_error = type(e).__name__
+            continue
+        text = (getattr(r, "text", "") or "").strip()
+        return {"ok": True, "text": text, "model": model, "latency_ms": round((time.perf_counter() - t) * 1000)}
+    return {"ok": False, "error": last_error, "latency_ms": round((time.perf_counter() - t) * 1000)}
