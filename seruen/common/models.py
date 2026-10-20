@@ -264,6 +264,8 @@ class Card(BaseModel):
     event: Optional[dict] = None
     rating: Optional[float] = None
     reviews: int = 0
+    transit: Optional[dict] = None       # 2GIS public transport option (bus, LRT …)
+    taxi: Optional[dict] = None          # 2GIS car time with traffic + link to open the route in 2GIS
     score: float = 0.0
     score_parts: dict[str, float] = Field(default_factory=dict)
     status: Status = "active"

@@ -62,6 +62,24 @@ def _sources(poi: POI) -> list[str]:
     return seen
 
 
+async def _where(lat: float, lon: float, cell: str) -> dict:
+    try:
+        return await call("places-live", "/v1/where", {"lat": lat, "lon": lon, "cell": cell}, timeout=3)
+    except ServiceError:
+        return {}
+
+
+async def _moves(a: tuple[float, float], b: tuple[float, float]) -> tuple[dict | None, dict | None]:
+    """Public transport and taxi options between two points (2GIS), in parallel."""
+    async def one(path):
+        try:
+            return (await call("places-live", path, {"from": list(a), "to": list(b)}, timeout=6)).get("option")
+        except ServiceError:
+            return None
+    tr, tx = await asyncio.gather(one("/v1/transit"), one("/v1/taxi"))
+    return tr, tx
+
+
 def _event_label(e: dict, lang: str) -> str:
     t = e["start"][11:16]
     when = {"ru": "весь день", "kk": "күні бойы", "en": "all day"}[lang] if t in ("00:00", "") else \
@@ -123,6 +141,7 @@ async def recommend_stream(req: RecommendRequest):
                 return None
 
         emb_task = asyncio.create_task(_embed())   # query embedding runs in parallel with NLU and context
+        where_task = asyncio.create_task(_where(lat, lon, req.cell))
         c_raw, ctx_raw = await asyncio.gather(
             _step(trace, "NLU: текст → условия", "nlu", call("nlu", "/v1/parse", nlu_p, timeout=7),
                   lambda r: f"{r['parsed_by']} · {r['time_budget_min']} мин · " + ", ".join(r["wants"] or ["—"])),
@@ -233,7 +252,8 @@ async def recommend_stream(req: RecommendRequest):
             poi = POI(**far["poi"])
             if poi.poi_id in {x.poi_id for x in cards} or len(cards) >= 3:
                 continue
-            taxi_min = int(far["distance_m"] * 1.25 / 1000 / 55 * 60) + 5
+            tr_opt, tx_opt = await _moves((lat, lon), (poi.lat, poi.lon))
+            taxi_min = tx_opt["minutes"] if tx_opt else int(far["distance_m"] * 1.25 / 1000 / 55 * 60) + 5
             hs = status_at(poi, start + timedelta(minutes=taxi_min), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
             far_lbl = {"ru": f" · далеко пешком, на такси ≈ {taxi_min} мин", "kk": f" · жаяу алыс, таксимен ≈ {taxi_min} мин",
                        "en": f" · too far to walk, ≈ {taxi_min} min by taxi"}[lang]
@@ -243,7 +263,7 @@ async def recommend_stream(req: RecommendRequest):
                               walk_min=walk_estimate(far["distance_m"], slow)[1], visit_min=poi.visit_min,
                               hours=hs.model_copy(update={"label": hs.label + far_lbl}), source_label=", ".join(_sources(poi)[:3]),
                               sources=_sources(poi), tags=poi.walk_tags, status=poi.status, role="alternative",
-                              description=poi.description.text if poi.description else None))
+                              description=poi.description.text if poi.description else None, transit=tr_opt, taxi=tx_opt))
             matched_map[poi.poi_id] = []
             reasons_map[poi.poi_id] = code_reasons(cards[-1], c, ctx, [])
         # events from the afisha (only when the user asked for events or a night out)
@@ -262,9 +282,26 @@ async def recommend_stream(req: RecommendRequest):
                                          "venue": e.get("venue_name"), "url": e.get("url")}))
                 matched_map[e["event_id"]] = ["events"]
                 reasons_map[e["event_id"]] = code_reasons(cards[-1], c, ctx, ["events"])
+        to_dest = None
+        if c.destination:
+            from seruen.engine.route import AIRPORT, TRAIN_STATION
+
+            dest_pt = AIRPORT if c.destination == "airport" else TRAIN_STATION
+            last = next((x for x in reversed(cards) if x.role in ("route", "pick") and x.kind == "poi"), None)
+            frm = (last.lat, last.lon) if last else (lat, lon)
+            tr_opt, tx_opt = await _moves(frm, dest_pt)
+            to_dest = {"name": {"airport": {"ru": "аэропорт", "kk": "әуежай", "en": "the airport"},
+                                "train_station": {"ru": "вокзал Нұрлы Жол", "kk": "Нұрлы Жол вокзалы", "en": "Nurly Zhol station"}}[c.destination][lang],
+                       "from": last.name if last else None, "transit": tr_opt, "taxi": tx_opt}
+            trace.append(TraceStep(name="Дорога дальше: такси и транспорт", service="places-live",
+                                   ms=0, detail=("такси ≈ " + str(tx_opt["minutes"]) + " мин" if tx_opt else "такси —") +
+                                   (" · транспорт ≈ " + str(tr_opt["minutes"]) + " мин" if tr_opt else " · транспорт —") + " · 2GIS"))
+        where = await where_task
         yield _sse("cards", {"items": [x.model_dump() for x in cards], "route": route,
-                             "origin": {"lat": lat, "lon": lon, "cell": req.cell},
-                             "to_destination_min": rt.get("to_destination_min")})
+                             "origin": {"lat": lat, "lon": lon, "cell": req.cell, "address": where.get("address"),
+                                        "building": where.get("building"), "district": where.get("district")},
+                             "to_destination_min": (to_dest["taxi"]["minutes"] if to_dest and to_dest.get("taxi") else rt.get("to_destination_min")),
+                             "to_destination": to_dest})
 
         # ---- AI part (call 2) with a hard time budget; templates otherwise
         mode = "template"
@@ -331,6 +368,21 @@ def extra(app: FastAPI) -> None:
     async def recommend(req: RecommendRequest):
         return StreamingResponse(recommend_stream(req), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/where")
+    async def api_where(cell: str):
+        if not valid_geohash(cell):
+            return {"address": None}
+        la, lo = geohash_decode(cell)
+        return await _where(la, lo, cell)
+
+    @app.get("/api/suggest")
+    async def api_suggest(q: str, cell: str = ""):
+        la, lo = geohash_decode(cell) if valid_geohash(cell) else (51.128, 71.43)
+        try:
+            return await call("places-live", "/v1/suggest", {"q": q, "lat": la, "lon": lo}, timeout=4)
+        except ServiceError:
+            return {"items": []}
 
     @app.get("/api/landmarks")
     async def get_landmarks():

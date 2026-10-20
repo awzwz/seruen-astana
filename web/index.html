@@ -70,6 +70,12 @@
             <button type="button" class="btn btn-soft" id="btn-locate"><span data-icon="locate"></span><span data-i18n="btn_locate">Где я</span></button>
             <button type="button" class="btn btn-soft" id="btn-mappick"><span data-icon="pin"></span><span data-i18n="btn_pick_map">На карте</span></button>
           </div>
+          <div class="from-search">
+            <span class="select-icon" data-icon="search"></span>
+            <label class="sr-only" for="from-q" data-i18n="from_label">Откуда: место или адрес</label>
+            <input id="from-q" type="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="from-list" data-i18n-attr="placeholder:from_ph" placeholder="Откуда? Место или адрес">
+            <ul id="from-list" class="from-list" role="listbox" hidden></ul>
+          </div>
           <div class="select-wrap">
             <span class="select-icon" data-icon="landmark"></span>
             <label class="sr-only" for="landmark" data-i18n="landmark_label">Достопримечательность для старта</label>

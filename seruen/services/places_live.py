@@ -202,3 +202,199 @@ async def nearby(p: dict) -> dict:
                 pois.append(poi.model_dump(mode="json"))
     return {"pois": pois, "stats": {"enabled": True, "queries": qs, "requests": len(qs), "items": len(pois),
                                     "ms": round((time.perf_counter() - t) * 1000)}}
+
+
+# ============================================================ 2GIS gateway: where / suggest / walk / transit / taxi
+ROUTING = "https://routing.api.2gis.com/routing/7.0.0/global"
+TRANSIT = "https://routing.api.2gis.com/public_transport/2.0"
+SUGGEST = "https://catalog.api.2gis.com/3.0/suggests"
+GEOCODE = "https://catalog.api.2gis.com/3.0/items/geocode"
+SUBTYPE_RU = {"bus": "автобус", "trolleybus": "троллейбус", "tram": "трамвай", "shuttle_bus": "маршрутка",
+              "light_metro": "LRT", "metro": "метро", "light_rail": "LRT", "suburban_train": "электричка"}
+
+
+def _quota(service: str, limit_env: str, default: int) -> bool:
+    limit = int(os.environ.get(limit_env, str(default)))
+    key = f"dgis:{service}:{date.today().isoformat()}"
+    if int(kv(1).get(key) or 0) >= limit:
+        return False
+    kv(1).incrby(key, 1, ex=2 * 86400)
+    return True
+
+
+def _wkt(sel: str) -> list[list[float]]:
+    """'LINESTRING(71.4 51.1, 71.5 51.2)' → [[71.4, 51.1], [71.5, 51.2]] (extra z values ignored)."""
+    try:
+        inner = sel[sel.index("(") + 1: sel.rindex(")")]
+        out = []
+        for pair in inner.split(","):
+            xs = pair.strip().split()
+            out.append([float(xs[0]), float(xs[1])])
+        return out
+    except Exception:
+        return []
+
+
+def directions_link(a: tuple[float, float], b: tuple[float, float]) -> str:
+    """Deep link that opens the route in 2GIS (there the user can also call a taxi)."""
+    return f"https://2gis.kz/astana/directions/points/{a[1]:.6f}%2C{a[0]:.6f}%7C{b[1]:.6f}%2C{b[0]:.6f}"
+
+
+@endpoint("places-live", "/v1/where")
+async def where(p: dict) -> dict:
+    """Reverse geocoding of the privacy-cell centre. Caching geocoding results is explicitly allowed by 2GIS (п. 4.2)."""
+    key = os.environ.get("DGIS_API_KEY")
+    cell = p.get("cell") or f"{p['lat']:.4f},{p['lon']:.4f}"
+    ck = f"dgis:where:{cell}"
+    hit = kv(1).get(ck)
+    if hit:
+        import orjson
+
+        return {**orjson.loads(hit), "cached": True}
+    if not key or not _quota("geo", "DGIS_GEO_DAILY_LIMIT", 800):
+        return {"address": None}
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as c:
+            r = await c.get(GEOCODE, params={"lat": p["lat"], "lon": p["lon"], "fields": "items.point,items.adm_div,items.full_name",
+                                             "locale": "ru_KZ", "key": key})
+        it = ((r.json().get("result") or {}).get("items") or [{}])[0]
+    except Exception:
+        return {"address": None}
+    district = next((a.get("name") for a in it.get("adm_div") or [] if a.get("type") == "district"), None)
+    building = (it.get("building_name") or "").split(",")[0] or None
+    out = {"address": it.get("address_name") or it.get("name"), "building": building, "district": district, "src": "2GIS"}
+    import orjson
+
+    kv(1).set(ck, orjson.dumps(out), ex=7 * 86400)
+    return out
+
+
+@endpoint("places-live", "/v1/suggest")
+async def suggest(p: dict) -> dict:
+    key = os.environ.get("DGIS_API_KEY")
+    q = (p.get("q") or "").strip()[:80]
+    if not key or len(q) < 2 or not _quota("suggest", "DGIS_SUGGEST_DAILY_LIMIT", 800):
+        return {"items": []}
+    params = {"q": q, "fields": "items.point,items.full_name", "locale": "ru_KZ", "key": key, "page_size": 7,
+              "location": f"{p.get('lon', 71.43):.4f},{p.get('lat', 51.13):.4f}"}
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as c:
+            items = ((await c.get(SUGGEST, params=params)).json().get("result") or {}).get("items") or []
+    except Exception:
+        return {"items": []}
+    out = []
+    for it in items:
+        pt = it.get("point")
+        if not pt:
+            continue
+        out.append({"name": (it.get("name") or "").split(",")[0], "subtitle": it.get("address_name") or it.get("full_name") or "",
+                    "lat": pt["lat"], "lon": pt["lon"]})
+    return {"items": out[:6], "src": "2GIS"}
+
+
+@endpoint("places-live", "/v1/walk")
+async def walk(p: dict) -> dict:
+    """Walking legs between consecutive points [[lat, lon], ...] — one 2GIS request per leg, in parallel."""
+    key = os.environ.get("DGIS_API_KEY")
+    pts = p.get("points") or []
+    if not key or len(pts) < 2:
+        return {"legs": None}
+
+    async def leg(c, a, b):
+        if not _quota("route", "DGIS_ROUTE_DAILY_LIMIT", 800):
+            return None
+        r = await c.post(ROUTING, params={"key": key}, json={
+            "points": [{"lat": a[0], "lon": a[1], "type": "walking", "start": True}, {"lat": b[0], "lon": b[1], "type": "walking"}],
+            "transport": "walking", "output": "detailed", "locale": "ru"})
+        res = (r.json().get("result") or [None])[0]
+        if not res:
+            return None
+        geom: list[list[float]] = []
+        for part in (res.get("begin_pedestrian_path"),):
+            if part:
+                geom += _wkt((part.get("geometry") or {}).get("selection", ""))
+        for m in res.get("maneuvers") or []:
+            for g in (m.get("outcoming_path") or {}).get("geometry") or []:
+                geom += _wkt(g.get("selection", ""))
+        end = res.get("end_pedestrian_path")
+        if end:
+            geom += _wkt((end.get("geometry") or {}).get("selection", ""))
+        return {"minutes": max(1, round(res.get("total_duration", 0) / 60)), "meters": int(res.get("total_distance", 0)),
+                "geometry": geom}
+
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as c:
+            legs = await asyncio.gather(*[leg(c, a, b) for a, b in zip(pts[:-1], pts[1:])], return_exceptions=True)
+    except Exception:
+        return {"legs": None}
+    if any(isinstance(x, Exception) or x is None for x in legs):
+        return {"legs": None}
+    return {"legs": legs, "src": "2GIS"}
+
+
+@endpoint("places-live", "/v1/transit")
+async def transit(p: dict) -> dict:
+    """Best public-transport option (bus, LRT …) between two points, with lines, transfers and geometry."""
+    key = os.environ.get("DGIS_API_KEY")
+    a, b = p["from"], p["to"]
+    if not key or not _quota("transit", "DGIS_TRANSIT_DAILY_LIMIT", 500):
+        return {"option": None}
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            r = await c.post(TRANSIT, params={"key": key}, json={
+                "source": {"point": {"lat": a[0], "lon": a[1]}}, "target": {"point": {"lat": b[0], "lon": b[1]}},
+                "transport": ["bus", "trolleybus", "tram", "shuttle_bus", "light_metro", "metro", "light_rail"], "locale": "ru"})
+        variants = r.json() if isinstance(r.json(), list) else []
+    except Exception:
+        return {"option": None}
+    variants = [v for v in variants if not v.get("pedestrian")]
+    if not variants:
+        return {"option": None}
+    import re
+
+    def walk_min(x):
+        m = re.search(r"(\d+)", x.get("total_walkway_distance") or "")
+        return int(m.group(1)) if m else 0
+
+    short = [x for x in variants if walk_min(x) <= 20] or variants
+    v = min(short, key=lambda x: x.get("total_duration") or 1e9)
+    lines, geom, wait = [], [], 0
+    for m in v.get("movements") or []:
+        wait += int(m.get("waiting_duration") or 0)
+        for rt in m.get("routes") or []:
+            st = rt.get("subtype", "")
+            lines.append({"kind": SUBTYPE_RU.get(st, rt.get("subtype_name") or st), "subtype": st,
+                          "names": rt.get("names", [])[:3], "color": rt.get("color")})
+        for alt in (m.get("alternatives") or [])[:1]:
+            seg = []
+            for g in alt.get("geometry") or []:
+                seg += _wkt(g.get("selection", ""))
+            if seg:
+                geom.append({"type": m.get("type"), "coords": seg})
+    times = [s.get("precise_time") for s in v.get("schedules") or [] if s.get("precise_time")][:3]
+    return {"option": {"minutes": round((v.get("total_duration") or 0) / 60), "transfers": v.get("transfer_count", 0),
+                       "walk": v.get("total_walkway_distance"), "lines": lines, "departures": times,
+                       "wait_min": round(wait / 60), "geometry": geom, "link": directions_link(tuple(a), tuple(b))},
+            "src": "2GIS"}
+
+
+@endpoint("places-live", "/v1/taxi")
+async def taxi(p: dict) -> dict:
+    """Car time with current traffic (2GIS 'taxi' routing) + a link that opens the route in 2GIS."""
+    key = os.environ.get("DGIS_API_KEY")
+    a, b = p["from"], p["to"]
+    if not key or not _quota("taxi", "DGIS_TAXI_DAILY_LIMIT", 500):
+        return {"option": None}
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as c:
+            r = await c.post(ROUTING, params={"key": key}, json={
+                "points": [{"lat": a[0], "lon": a[1], "type": "stop", "start": True}, {"lat": b[0], "lon": b[1], "type": "stop"}],
+                "transport": "taxi", "route_mode": "fastest", "traffic_mode": "jam", "output": "summary", "locale": "ru"})
+        res = (r.json().get("result") or [None])[0]
+    except Exception:
+        return {"option": None}
+    if not res or not res.get("duration"):
+        return {"option": None}
+    return {"option": {"minutes": max(1, round(res["duration"] / 60)) + 5, "drive_min": max(1, round(res["duration"] / 60)),
+                       "km": round(res.get("length", 0) / 1000, 1), "traffic": True, "link": directions_link(tuple(a), tuple(b))},
+            "src": "2GIS"}

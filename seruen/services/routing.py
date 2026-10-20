@@ -4,11 +4,11 @@ and the mini-route of up to 3 stops with opening hours, weather limits and the f
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 
-from seruen.common.clients import endpoint
+from seruen.common.clients import call, endpoint
 from seruen.common.config import settings
 from seruen.common.geo import SLOW_M_PER_MIN, WALK_M_PER_MIN, haversine_m, walk_estimate
 from seruen.common.models import CATEGORIES, POI, Constraints, Context, Leg, Route
@@ -105,16 +105,35 @@ async def route(p: dict) -> dict:
     walk = {x.poi_id: {"minutes": round(origin_min[x.poi_id]), "approx": mat is None} for x in pois}
     legs: list[Leg] = []
     if ids:
+        seq = [o] + [pts[idx[i]] for i in ids]
+        # final legs: 2GIS pedestrian routing (knows underpasses and paths through buildings); OSRM / straight line as fallback
+        try:
+            g2 = (await call("places-live", "/v1/walk", {"points": [list(x) for x in seq]}, timeout=5)).get("legs")
+        except Exception:
+            g2 = None
+        geoms = None if g2 else await asyncio.gather(*[osrm_geometry(a, b) for a, b in zip(seq[:-1], seq[1:])])
         prev_id, prev_pt = "origin", o
-        geoms = await asyncio.gather(*[osrm_geometry(a, b) for a, b in zip(
-            [o] + [pts[idx[i]] for i in ids[:-1]], [pts[idx[i]] for i in ids])])
         for k, pid in enumerate(ids):
             pt = pts[idx[pid]]
-            m = round(origin_min[pid]) if k == 0 else round(mins(idx[prev_id], idx[pid]))
-            meters = int(haversine_m(*prev_pt, *pt) * 1.3)
+            if g2:
+                m, meters, geo, approx = g2[k]["minutes"], g2[k]["meters"], g2[k]["geometry"], False
+                if slow:
+                    m = max(m, round(m * speed_scale))
+            else:
+                m = round(origin_min[pid]) if k == 0 else round(mins(idx[prev_id], idx[pid]))
+                meters, geo, approx = int(haversine_m(*prev_pt, *pt) * 1.3), geoms[k], geoms[k] is None
             legs.append(Leg(from_id=prev_id, to_id=pid, meters=meters, minutes=m, outdoor_min=m,
-                            geometry=geoms[k] or [[prev_pt[1], prev_pt[0]], [pt[1], pt[0]]], approx=geoms[k] is None))
+                            geometry=geo or [[prev_pt[1], prev_pt[0]], [pt[1], pt[0]]], approx=approx or not geo))
             prev_id, prev_pt = pid, pt
+        if g2:
+            method = "2GIS (пешие маршруты) + " + method
+            # re-time the plan with the 2GIS minutes
+            t = start
+            for leg, tl in zip(legs, timeline):
+                t = t + timedelta(minutes=leg.minutes)
+                tl["arrive"] = t.strftime("%H:%M")
+                t = t + timedelta(minutes=tl.get("visit_min", 0))
+                tl["leave"] = t.strftime("%H:%M")
     total = sum(l.minutes for l in legs) + sum(x.get("visit_min", 0) for x in timeline)
     r = Route(stops=ids, legs=legs, total_min=int(total), timeline=timeline,
               warm_stops=(ctx.mode != "walk" and len(ids) > 1)) if ids else None

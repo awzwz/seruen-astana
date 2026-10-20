@@ -116,6 +116,9 @@
     edit: '<path d="M4 20h4.2L19.4 8.8a2.1 2.1 0 0 0-3-3L5.2 17v3z"/><path d="M14.4 7.8l3 3"/>',
     swap: '<path d="M4 8h13.5M14 4.5L17.5 8 14 11.5M20 16H6.5M10 12.5L6.5 16l3.5 3.5"/>',
     plane: '<path d="M10.5 13.5L3 11l1.5-1.5 7.5 1L16 6c1-1 2.6-1.4 3.4-.6.8.8.4 2.4-.6 3.4l-4.5 4.5 1 7.5L13.8 22l-2.5-7.5-3.8 3.8.3 2.2-1.5 1.5-1.2-3.3-3.3-1.2 1.5-1.5 2.2.3 3.8-3.8z"/>',
+    bus: '<rect x="5" y="3.5" width="14" height="14" rx="2.5"/><path d="M5 10.5h14M8 17.5v2.5M16 17.5v2.5"/><circle cx="8.5" cy="14" r=".9"/><circle cx="15.5" cy="14" r=".9"/>',
+    car: '<path d="M4 15.5V12l2-5h12l2 5v3.5"/><path d="M3.5 15.5h17v3h-17z"/><circle cx="7.5" cy="18.5" r="1.3"/><circle cx="16.5" cy="18.5" r="1.3"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>',
     spark: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>'
   };
@@ -441,16 +444,69 @@
     state.originMsgKey = null;
     if (state.formMsgKey && state.formMsgKey.key === 'need_origin') state.formMsgKey = null;
     renderMsgs();
+    state.where = null;
     renderOrigin();
+    fetchWhere();
     updateOriginOnMap(options.fly !== false);
     // distances are recomputed locally from the new exact point
     if (state.res && state.res.cards) renderCards(false);
     renderSummary();
   }
 
+  // «Вы здесь»: 2GIS address of the privacy cell (the exact point never leaves the browser)
+  let whereSeq = 0;
+  async function fetchWhere() {
+    if (state.mock || !state.cell) return;
+    const seq = ++whereSeq, cell = state.cell;
+    try {
+      const r = await fetch('/api/where?cell=' + encodeURIComponent(cell), {headers: {Accept: 'application/json'}});
+      const j = r.ok ? await r.json() : null;
+      if (seq !== whereSeq || cell !== state.cell) return;
+      state.where = j && j.address ? j : null;
+      renderOrigin();
+    } catch (e) { /* no address — fine */ }
+  }
+
+  // «Откуда?»: 2GIS suggestions for a typed place or address
+  let sugTimer = null, sugSeq = 0;
+  function initFromSearch() {
+    const inp = $('#from-q'), list = $('#from-list');
+    if (!inp || !list) return;
+    const close = () => { list.hidden = true; list.innerHTML = ''; inp.setAttribute('aria-expanded', 'false'); };
+    inp.addEventListener('input', () => {
+      clearTimeout(sugTimer);
+      const q = inp.value.trim();
+      if (q.length < 2 || state.mock) { close(); return; }
+      sugTimer = setTimeout(async () => {
+        const seq = ++sugSeq;
+        try {
+          const r = await fetch('/api/suggest?q=' + encodeURIComponent(q) + '&cell=' + encodeURIComponent(state.cell || ''), {headers: {Accept: 'application/json'}});
+          const j = r.ok ? await r.json() : {items: []};
+          if (seq !== sugSeq) return;
+          const items = (j && j.items) || [];
+          if (!items.length) { list.innerHTML = '<li class="from-empty">' + esc(t('from_none')) + '</li>'; list.hidden = false; return; }
+          list.innerHTML = items.map((it, i) => '<li role="option" tabindex="-1" data-i="' + i + '"><b>' + esc(it.name) + '</b><span>' + esc(it.subtitle || '') + '</span></li>').join('') +
+            '<li class="from-src" aria-hidden="true">2GIS</li>';
+          list.hidden = false;
+          inp.setAttribute('aria-expanded', 'true');
+          list.querySelectorAll('li[data-i]').forEach((li) => li.addEventListener('mousedown', (ev) => {
+            ev.preventDefault();
+            const it = items[+li.dataset.i];
+            inp.value = it.name;
+            close();
+            setOrigin({lat: it.lat, lon: it.lon, source: 'search', label: it.name});
+          }));
+        } catch (e) { close(); }
+      }, 250);
+    });
+    inp.addEventListener('blur', () => setTimeout(close, 150));
+    inp.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  }
+
   function originText() {
     const o = state.origin;
     if (!o) return t('origin_none');
+    if (o.source === 'search') return t('origin_search', {name: o.label || ''});
     if (o.source === 'geo') return t('origin_geo', {acc: Math.max(1, Math.round(o.acc || 0))});
     if (o.source === 'landmark') return t('origin_landmark', {name: lmName(state.landmarks[o.lm] || {})});
     if (o.source === 'sample') return t('origin_sample');
@@ -460,6 +516,7 @@
     const o = state.origin;
     if (!o) return '';
     if (o.source === 'landmark') return lmName(state.landmarks[o.lm] || {});
+    if (o.source === 'search') return o.label || '';
     if (o.source === 'sample') return t('origin_sample');
     if (o.source === 'geo') return t('btn_locate');
     return t('origin_map');
@@ -470,7 +527,10 @@
     const st = $('#origin-status');
     const ic = !o ? 'target' : o.source === 'geo' ? 'locate' : o.source === 'landmark' ? 'landmark' : 'pin';
     st.className = 'origin-status' + (o ? ' is-set' : '');
-    st.innerHTML = icon(ic) + '<span>' + esc(originText()) + '</span>';
+    const w = state.where;
+    st.innerHTML = icon(ic) + '<span>' + esc(originText()) +
+      (w && w.address ? '<span class="where">' + esc(t('where_prefix')) + ' ' + esc([w.address, w.building].filter(Boolean).join(' · ')) +
+        '<small> · 2GIS</small></span>' : '') + '</span>';
     $('#cell-code').innerHTML = state.cell ? ' · ' + esc(t('cell_label')) + ' <code>' + esc(state.cell) + '</code>' : '';
     const sel = $('#landmark');
     sel.value = o && o.source === 'landmark' ? String(o.lm) : '';
@@ -668,7 +728,7 @@
     } else {
       originMarker.setLngLat(ll);
     }
-    originMarker.getElement().setAttribute('aria-label', t('start') + ': ' + originText());
+    originMarker.getElement().setAttribute('aria-label', t('start') + ': ' + (originShort() || originText()));
     syncMapData();
     if (fly) map.easeTo({center: ll, zoom: Math.max(map.getZoom(), 14), duration: motionOK() ? 700 : 0});
   }
@@ -942,6 +1002,8 @@
         r.route = (data && data.route) || null;
         r.origin = (data && data.origin) || null;
         r.toDest = data && data.to_destination_min != null ? Number(data.to_destination_min) : null;
+        r.toDestObj = (data && data.to_destination) || null;
+        if (r.origin && r.origin.address && !state.where) { state.where = r.origin; renderOrigin(); }
         r._view = null;
         renderCards(true);
         renderRoute();
@@ -1148,8 +1210,12 @@
     const box = $('#route');
     const route = r && r.route;
     const destKey = r && r.constraints && r.constraints.destination ? 'dest_' + r.constraints.destination : 'dest_other';
-    const destLine = r && r.toDest != null && isFinite(r.toDest)
-      ? '<p class="dest-line">' + icon(destKey === 'dest_airport' ? 'plane' : 'arrow') + '<span>' + esc(t(destKey, {n: Math.round(r.toDest)})) + '</span></p>' : '';
+    const td = r && r.toDestObj;
+    const destLine = td && (td.taxi || td.transit)
+      ? '<div class="dest-block"><p class="dest-line">' + icon(destKey === 'dest_airport' ? 'plane' : 'arrow') + '<span>' +
+          esc(t('dest_then', {name: td.name || ''})) + (td.from ? ' · ' + esc(t('dest_from', {name: td.from})) : '') + '</span></p>' + movesHTML(td) + '</div>'
+      : r && r.toDest != null && isFinite(r.toDest)
+        ? '<p class="dest-line">' + icon(destKey === 'dest_airport' ? 'plane' : 'arrow') + '<span>' + esc(t(destKey, {n: Math.round(r.toDest)})) + '</span></p>' : '';
     if (!route || !Array.isArray(route.stops) || !route.stops.length) {
       box.innerHTML = destLine ? '<section class="route">' + destLine + '</section>' : '';
       return;
@@ -1226,6 +1292,24 @@
     return '<div class="hours lvl-' + level + '">' + '<span class="hours-ic">' + icon(ic) + '</span>' +
       '<p><span class="hours-main">' + esc(main) + '</span>' + (note ? '<span class="hours-sep"> · </span><span class="hours-note">' + esc(note) + '</span>' : '') +
       ' ' + lvl + status + '</p></div>';
+  }
+
+  // taxi + public transport options from 2GIS (for far places and the way to the airport / station)
+  function movesHTML(m) {
+    if (!m || (!m.taxi && !m.transit)) return '';
+    const rows = [];
+    if (m.taxi) {
+      rows.push('<li>' + icon('car') + '<span>' + esc(t('taxi_line', {n: m.taxi.minutes, km: fmtNum(m.taxi.km || 0, 1)})) + '</span></li>');
+    }
+    if (m.transit) {
+      const lines = (m.transit.lines || []).map((l) => (l.kind || '') + ' ' + (l.names || []).join(', ')).join(' → ');
+      rows.push('<li>' + icon('bus') + '<span>' + esc(t('transit_line', {lines: lines || t('transit_generic'), n: m.transit.minutes})) +
+        (m.transit.transfers ? ' · ' + esc(t('transfers', {n: m.transit.transfers})) : '') +
+        (m.transit.walk ? ' · ' + esc(m.transit.walk) : '') + '</span></li>');
+    }
+    const link = (m.taxi && m.taxi.link) || (m.transit && m.transit.link);
+    return '<ul class="moves">' + rows.join('') + '</ul>' +
+      (link ? '<p class="moves-link"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + icon('external') + esc(t('open_2gis')) + '</a></p>' : '');
   }
 
   function accessHTML(card) {
@@ -1358,6 +1442,7 @@
         (card.rating ? '<span class="fact fact-rating" title="2GIS">★ ' + esc(fmtNum(card.rating, 1)) + ' · ' +
           esc(fmtNum(card.reviews || 0, 0)) + ' ' + esc({ru: 'отзывов в 2GIS', kk: '2GIS пікірі', en: 'reviews on 2GIS'}[state.lang] || 'отзывов в 2GIS') + '</span>' : '') + '</p>' +
       (card.kind === 'event' ? '' : hoursHTML(card.hours)) + statusWarn + accessHTML(card) + eventHTML(card) +
+      ((card.taxi || card.transit) ? '<div class="card-moves"><p class="moves-title">' + esc(t('far_how')) + '</p>' + movesHTML(card) + '</div>' : '') +
       (card.description ? '<p class="desc">' + esc(card.description) + (card.description_ai ? ' <span class="tag tag-ai-sm">' + icon('sparkle') + esc(t('desc_ai')) + '</span>' : '') + '</p>' : '') +
       '<div class="exp' + (exp && animate ? ' exp-in' : '') + '" id="exp-' + i + '" aria-live="polite">' + expBody + '</div>' +
       '<footer class="card-foot">' +
@@ -1554,6 +1639,7 @@
     }));
 
     $('#btn-locate').addEventListener('click', locate);
+    initFromSearch();
     $('#btn-mappick').addEventListener('click', () => {
       showMapNote('map_pick_hint', 5000);
       if (mobileMQ.matches) window.scrollTo({top: 0, behavior: motionOK() ? 'smooth' : 'auto'});

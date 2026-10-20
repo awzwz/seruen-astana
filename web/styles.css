@@ -856,3 +856,27 @@ input[type="range"] { width: 100%; min-height: 40px; accent-color: var(--sky-600
   .om-pulse { display: none; }
   .sk { animation: none; }
 }
+
+/* «Откуда?» search with 2GIS suggestions */
+.from-search { position: relative; margin-top: 10px; }
+.from-search input { width: 100%; min-height: 42px; padding: 0 12px 0 38px; border: 1px solid var(--line, #d9e1e7); border-radius: 10px;
+  background: var(--surface, #fff); color: inherit; font: inherit; }
+.from-search input:focus-visible { outline: 2px solid var(--sky-600, #1f6fb2); outline-offset: 1px; }
+.from-search .select-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; opacity: .7; }
+.from-list { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none;
+  background: var(--surface, #fff); border: 1px solid var(--line, #d9e1e7); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+.from-list li[data-i] { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.from-list li[data-i]:hover { background: var(--surface-2, #f2f5f7); }
+.from-list li span { font-size: 12.5px; opacity: .7; }
+.from-list .from-src, .from-list .from-empty { padding: 6px 10px; font-size: 12px; opacity: .6; }
+.origin-status .where { display: block; font-size: 12.5px; opacity: .85; margin-top: 2px; }
+.origin-status .where small { opacity: .7; }
+/* taxi / public transport options */
+.moves { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.moves li { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; }
+.moves .ic { flex: none; margin-top: 2px; }
+.moves-link { margin: 6px 0 0; font-size: 13px; }
+.moves-link a { display: inline-flex; gap: 6px; align-items: center; }
+.card-moves { margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--line, #d9e1e7); border-radius: 10px; }
+.moves-title { margin: 0; font-weight: 600; font-size: 13px; }
+.dest-block { display: grid; gap: 2px; }

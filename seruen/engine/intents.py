@@ -124,6 +124,9 @@ def parse_rules(text: str, chips: Chips, lang: str) -> Constraints:
             if w not in wants:
                 wants.append(w)
     c.wants = [w for w in wants if w != "kids"] if c.kids else wants
+    if c.destination == "airport" and not c.wants:
+        c.tourist = True
+        c.wants = ["landmark", "food"]
     walk_words = re.search(r"прогул|погуля|маршрут|пройт|серуен|walk|stroll|route|\bпешком", t)
     if c.wants and set(c.wants) <= {"coffee", "quiet", "power", "food"} and not walk_words:
         c.want_route = False
