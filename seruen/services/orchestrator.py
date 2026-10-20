@@ -181,7 +181,8 @@ async def recommend_stream(req: RecommendRequest):
             for r in ranked:
                 poi = POI(**by_id[r["poi_id"]]["poi"])
                 st = status_at(poi, start + timedelta(minutes=r["est_walk_min"]), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
-                if st.status not in ("closed", "closes_soon"):
+                late_unknown = st.status == "unknown" and ctx.is_dark and poi.category not in ("bar", "nightclub")
+                if st.status not in ("closed", "closes_soon") and not late_unknown:
                     final_ids.append(poi.poi_id)
                 if len(final_ids) == 3:
                     break

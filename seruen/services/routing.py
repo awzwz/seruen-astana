@@ -87,7 +87,7 @@ async def route(p: dict) -> dict:
             if st.status in ("closed", "closes_soon"):
                 return False
             if st.status == "unknown" and (ctx.is_dark or ctx.is_holiday):
-                return bool(c.night and poi.category in NIGHT_CATS)   # at night bars rarely publish hours: allowed, labelled
+                return bool(c.night and poi.category in {"bar", "nightclub"})   # bars rarely publish hours: allowed, labelled
             return True
         return ok
 
