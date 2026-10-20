@@ -1,0 +1,41 @@
+# Unleash feature flags (chart unleash/unleash), namespace platform. UI https://unleash.<ip-dashes>.sslip.io
+# DB: our Postgres (catalog-rw.data, db unleash, role unleash); the chart's Bitnami Postgres is disabled.
+# Secret platform/unleash (db password, admin password) from deploy/secrets/unleash.env. Admin user: admin.
+replicaCount: 1
+postgresql:
+  enabled: false
+dbConfig:
+  host: catalog-rw.data.svc.cluster.local
+  port: 5432
+  database: unleash
+  user: unleash
+  pass: ""
+  useExistingSecret:
+    name: unleash
+    key: db-password
+env:
+  - name: DATABASE_SSL
+    value: "false"
+  - name: UNLEASH_DEFAULT_ADMIN_USERNAME
+    value: admin
+  - name: UNLEASH_DEFAULT_ADMIN_PASSWORD
+    valueFrom: {secretKeyRef: {name: unleash, key: admin-password}}
+  - name: SEND_TELEMETRY
+    value: "false"
+  - name: CHECK_VERSION
+    value: "false"
+resources:
+  requests: {cpu: 50m, memory: 192Mi}
+  limits: {memory: 512Mi}
+readinessProbe:
+  enabled: true
+  path: /health
+  initialDelaySeconds: 20
+  successThreshold: 1
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts: []      # set by bootstrap.sh
+  tls: []        # set by bootstrap.sh

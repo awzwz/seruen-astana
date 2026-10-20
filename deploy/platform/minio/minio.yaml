@@ -1,0 +1,90 @@
+# MinIO (S3 API) single node, namespace data. minio.data:9000 (S3), :9001 (console, port-forward only).
+# MinIO stopped publishing official community images in 2025 (minio/minio and quay.io/minio/minio are gone),
+# so this uses Chainguard's build from MinIO source, pinned by digest.
+# Root credentials: secret data/minio-auth (MINIO_ROOT_USER / MINIO_ROOT_PASSWORD), created by bootstrap.sh.
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: data
+  labels: {app.kubernetes.io/name: minio}
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: minio}
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-headless
+  namespace: data
+  labels: {app.kubernetes.io/name: minio}
+spec:
+  clusterIP: None
+  selector: {app.kubernetes.io/name: minio}
+  ports:
+    - name: s3
+      port: 9000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: data
+  labels: {app.kubernetes.io/name: minio}
+spec:
+  serviceName: minio-headless
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: minio}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: minio}
+    spec:
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: minio
+          image: cgr.dev/chainguard/minio@sha256:2915cb406f38ed6ff9634de0a3e4a9423e2dda06a6f1aca18f8c968aa37a01f6
+          args: [server, /data, --address, ":9000", --console-address, ":9001"]
+          envFrom:
+            - secretRef: {name: minio-auth}
+          env:
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: public
+            - name: MINIO_BROWSER_REDIRECT
+              value: "false"
+          ports:
+            - {name: s3, containerPort: 9000}
+            - {name: console, containerPort: 9001}
+          readinessProbe:
+            httpGet: {path: /minio/health/ready, port: 9000}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /minio/health/live, port: 9000}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 50m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: do-block-storage
+        resources:
+          requests:
+            storage: 10Gi

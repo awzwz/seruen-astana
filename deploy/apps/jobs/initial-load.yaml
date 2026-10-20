@@ -1,0 +1,45 @@
+# One-off initial load (SERVICE=initial-load): loads data/catalog into PG / OpenSearch / Kafka.
+# NOT part of the kustomization (Jobs are immutable and must not re-run on every sync). Run it with:
+#   kubectl -n seruen create -f deploy/apps/jobs/initial-load.yaml
+#   kubectl -n seruen logs -f -l app.kubernetes.io/name=initial-load
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: initial-load-
+  namespace: seruen
+  labels:
+    app.kubernetes.io/name: initial-load
+    app.kubernetes.io/component: job
+    app.kubernetes.io/part-of: seruen
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 7200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      annotations:
+        linkerd.io/inject: disabled   # a meshed sidecar would keep the Job from finishing
+      labels:
+        app.kubernetes.io/name: initial-load
+        app.kubernetes.io/component: job
+        app.kubernetes.io/part-of: seruen
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: seruen
+      containers:
+        - name: app
+          image: registry.digitalocean.com/seruen/seruen:latest
+          imagePullPolicy: Always
+          env:
+            - name: SERVICE
+              value: initial-load
+            - name: OTEL_SERVICE_NAME
+              value: initial-load
+          envFrom:
+            - configMapRef: {name: seruen-config}
+            - secretRef: {name: seruen-secrets}
+            - secretRef: {name: seruen-db}
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "2", memory: 1536Mi}

@@ -1,0 +1,151 @@
+# Kafka topics from docs/CONTRACTS.md. Partitions 3, RF 1. CONTRACTS gives no retention, so 7 days (604800000 ms) everywhere.
+# Topic names contain dots, which are valid Kubernetes object names, so metadata.name == topic name.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: poi.raw
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: poi.raw
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: events.raw
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: events.raw
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: ingest.run
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: ingest.run
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: poi.normalized
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: poi.normalized
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: poi.changed
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: poi.changed
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: poi.embedded
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: poi.embedded
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: feedback
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: feedback
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: reco.served
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: reco.served
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: quality.alerts
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: quality.alerts
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: dlq
+  namespace: data
+  labels:
+    strimzi.io/cluster: seruen
+spec:
+  topicName: dlq
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete

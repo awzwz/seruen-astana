@@ -1,0 +1,52 @@
+# OpenSearch single node (chart opensearch/opensearch), namespace data.
+# Security plugin DISABLED: plain HTTP, cluster-internal only (ClusterIP service opensearch.data:9200, never in an Ingress).
+# The official image bundles the k-NN plugin (knn_vector for the 1024-d embeddings).
+clusterName: seruen-search
+nodeGroup: master
+fullnameOverride: opensearch
+masterService: opensearch
+singleNode: true
+replicas: 1
+roles:
+  - cluster_manager
+  - ingest
+  - data
+opensearchJavaOpts: "-Xms1g -Xmx1g"
+resources:
+  requests:
+    cpu: 250m
+    memory: 2Gi
+  limits:
+    memory: 2Gi
+persistence:
+  enabled: true
+  enableInitChown: true
+  storageClass: do-block-storage
+  size: 15Gi
+  accessModes:
+    - ReadWriteOnce
+extraEnvs:
+  - name: DISABLE_SECURITY_PLUGIN
+    value: "true"
+  - name: DISABLE_INSTALL_DEMO_CONFIG
+    value: "true"
+config:
+  opensearch.yml: |
+    cluster.name: seruen-search
+    network.host: 0.0.0.0
+    plugins.security.disabled: true
+    knn.memory.circuit_breaker.limit: 50%
+    action.auto_create_index: true
+# vm.max_map_count=262144 via a privileged init container (DOKS nodes default is lower).
+sysctlInit:
+  enabled: true
+service:
+  type: ClusterIP
+protocol: http
+httpPort: 9200
+transportPort: 9300
+readinessProbe:
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6

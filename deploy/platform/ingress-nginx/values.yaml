@@ -1,0 +1,35 @@
+# ingress-nginx (chart ingress-nginx/ingress-nginx), namespace ingress-nginx.
+# One controller replica behind a DigitalOcean Load Balancer (created by the DO cloud controller).
+# Proxy protocol is NOT used (keeps in-cluster hairpin traffic for cert-manager HTTP-01 simple).
+controller:
+  replicaCount: 1
+  ingressClassResource:
+    name: nginx
+    default: true
+  service:
+    type: LoadBalancer
+    externalTrafficPolicy: Cluster
+    annotations:
+      service.beta.kubernetes.io/do-loadbalancer-name: "seruen-lb"
+      service.beta.kubernetes.io/do-loadbalancer-size-unit: "1"
+  config:
+    # SSE from the orchestrator: no buffering, long reads (also set per-Ingress).
+    proxy-read-timeout: "300"
+    proxy-send-timeout: "300"
+    use-gzip: "true"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      # Switched on by bootstrap.sh once the Prometheus Operator CRDs exist.
+      enabled: false
+      additionalLabels: {}
+  admissionWebhooks:
+    enabled: true
+defaultBackend:
+  enabled: false

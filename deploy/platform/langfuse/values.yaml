@@ -1,0 +1,126 @@
+# Langfuse (chart langfuse/langfuse 2.x), namespace platform. LLM tracing UI at https://langfuse.<ip-dashes>.sslip.io
+# Reuses our stores (nothing bundled is deployed):
+#   Postgres  catalog-rw.data   db langfuse / role langfuse (CNPG managed role, secret data/pg-langfuse)
+#   ClickHouse clickhouse.data  db langfuse, user seruen, single node (cluster mode off)
+#   Redis     redis.data db 3
+#   S3        minio.data bucket langfuse
+# Secret platform/langfuse (salt, encryption key, nextauth secret, passwords, init keys) is created by bootstrap.sh
+# from deploy/secrets/langfuse.env. Sign-up is disabled; the initial admin user + project keys come from LANGFUSE_INIT_*.
+# Host values are injected by bootstrap.sh with --set.
+langfuse:
+  logging:
+    level: info
+    format: text
+  features:
+    telemetryEnabled: false
+    signUpDisabled: true
+  salt:
+    secretKeyRef: {name: langfuse, key: salt}
+  encryptionKey:
+    secretKeyRef: {name: langfuse, key: encryption-key}
+  nextauth:
+    url: http://localhost:3000   # set by bootstrap.sh
+    secret:
+      secretKeyRef: {name: langfuse, key: nextauth-secret}
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    hosts: []                    # set by bootstrap.sh
+    tls:
+      enabled: true
+      secretName: langfuse-tls
+  # NOTE 2026-10-20: with 448Mi/1Gi the web pod died with "JavaScript heap out of memory" (~500 MB heap) and was
+  # uninstalled. Values below are the next thing to try (untested): bigger heap + 1.5Gi limit (> the 1 GiB budget).
+  web:
+    resources:
+      requests: {cpu: 100m, memory: 768Mi}
+      limits: {memory: 1536Mi}
+    # startup runs Prisma + ClickHouse migrations before Next.js listens: give it time
+    livenessProbe:
+      initialDelaySeconds: 180
+      failureThreshold: 6
+    readinessProbe:
+      initialDelaySeconds: 30
+      failureThreshold: 12
+  worker:
+    resources:
+      requests: {cpu: 50m, memory: 384Mi}
+      limits: {memory: 1Gi}
+  additionalEnv:
+    - name: NODE_OPTIONS
+      value: --max-old-space-size=1024
+    - name: REDIS_CONNECTION_STRING
+      value: redis://redis.data.svc.cluster.local:6379/3
+    - name: LANGFUSE_INIT_ORG_ID
+      value: seruen
+    - name: LANGFUSE_INIT_ORG_NAME
+      value: Seruen
+    - name: LANGFUSE_INIT_PROJECT_ID
+      value: seruen
+    - name: LANGFUSE_INIT_PROJECT_NAME
+      value: seruen
+    - name: LANGFUSE_INIT_USER_NAME
+      value: admin
+    - name: LANGFUSE_INIT_USER_EMAIL
+      valueFrom: {secretKeyRef: {name: langfuse, key: init-user-email}}
+    - name: LANGFUSE_INIT_USER_PASSWORD
+      valueFrom: {secretKeyRef: {name: langfuse, key: init-user-password}}
+    - name: LANGFUSE_INIT_PROJECT_PUBLIC_KEY
+      valueFrom: {secretKeyRef: {name: langfuse, key: public-key}}
+    - name: LANGFUSE_INIT_PROJECT_SECRET_KEY
+      valueFrom: {secretKeyRef: {name: langfuse, key: secret-key}}
+
+postgresql:
+  deploy: false
+  host: catalog-rw.data.svc.cluster.local
+  port: 5432
+  auth:
+    username: langfuse
+    existingSecret: langfuse
+    secretKeys:
+      userPasswordKey: pg-password
+    database: langfuse
+  migration:
+    autoMigrate: true
+
+# external Redis via langfuse.additionalEnv REDIS_CONNECTION_STRING (db 3); the chart forbids also setting redis.host.
+# Our Redis runs volatile-lru: BullMQ keys have no TTL, so they are never evicted (Langfuse asks for noeviction).
+redis:
+  deploy: false
+  auth:
+    enabled: false
+    username: ""
+
+clickhouse:
+  deploy: false
+  crdCheck: false
+  host: clickhouse.data.svc.cluster.local
+  httpPort: 8123
+  nativePort: 9000
+  database: langfuse
+  auth:
+    username: seruen
+    existingSecret: langfuse
+    existingSecretKey: clickhouse-password
+  migration:
+    autoMigrate: true
+    ssl: false
+  cluster:
+    enabled: false
+  keeper:
+    enabled: false
+
+s3:
+  deploy: false
+  storageProvider: s3
+  bucket: langfuse
+  region: us-east-1
+  endpoint: http://minio.data.svc.cluster.local:9000
+  forcePathStyle: true
+  accessKeyId:
+    secretKeyRef: {name: langfuse, key: s3-access-key}
+  secretAccessKey:
+    secretKeyRef: {name: langfuse, key: s3-secret-key}

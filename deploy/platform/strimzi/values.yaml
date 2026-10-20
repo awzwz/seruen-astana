@@ -1,0 +1,14 @@
+# Strimzi cluster operator (chart strimzi/strimzi-kafka-operator), namespace platform.
+# Watches namespace "data", where the Kafka cluster "seruen" lives.
+watchNamespaces:
+  - data
+watchAnyNamespace: false
+replicas: 1
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+logLevel: INFO
+fullReconciliationIntervalMs: 120000

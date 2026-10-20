@@ -1,0 +1,27 @@
+# Certificates for the platform UIs. __DOMAIN__ is replaced by bootstrap.sh with <LB-IP-with-dashes>.sslip.io.
+# The grafana certificate doubles as the "does Let's Encrypt work" test of bootstrap step 3.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana-tls
+  namespace: observability
+spec:
+  secretName: grafana-tls
+  dnsNames:
+    - grafana.__DOMAIN__
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: argocd-tls
+  namespace: argocd
+spec:
+  secretName: argocd-tls
+  dnsNames:
+    - argocd.__DOMAIN__
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-prod

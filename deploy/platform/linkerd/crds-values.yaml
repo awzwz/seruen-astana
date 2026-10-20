@@ -1,0 +1,2 @@
+# linkerd-crds (chart linkerd-edge/linkerd-crds). Gateway API CRDs already exist on DOKS (Cilium).
+installGatewayAPI: false

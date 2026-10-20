@@ -1,0 +1,46 @@
+# Shared runtime configuration of every Seruen pod (envFrom). Names = seruen/common/config.py.
+# Secrets are NOT here (deploy/scripts/sync-secrets.sh creates them):
+#   seruen-db      PG_USER, PG_PASSWORD (+ DATABASE_URL)
+#   seruen-secrets OPENAI_API_KEY, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
+# Service-to-service URLs: http://<name>.$SERVICE_DOMAIN:8000; override one with SERVICE_URL_<NAME> (e.g. SERVICE_URL_LLM_GATEWAY).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seruen-config
+data:
+  SERUEN_MODE: cluster
+  SERVICE_DOMAIN: seruen.svc.cluster.local
+  TZ: Asia/Almaty
+  # public URL, overwritten by patches/public-url.yaml (deploy/scripts/render-hosts.sh)
+  PUBLIC_BASE_URL: https://seruen.example.sslip.io
+
+  # Kafka (Strimzi, 1 broker, RF=1, plain listener). Consumer group of a worker = KAFKA_GROUP_ID (= worker name).
+  KAFKA_BOOTSTRAP: seruen-kafka-bootstrap.data.svc.cluster.local:9092
+
+  # PostgreSQL 17 + PostGIS 3.5 (CloudNativePG cluster "catalog", read/write service)
+  PG_HOST: catalog-rw.data.svc.cluster.local
+  PG_DB: seruen
+
+  # Redis: the app derives db 0 sessions / 1 caches / 2 Celery broker from this URL
+  REDIS_URL: redis://redis.data.svc.cluster.local:6379/0
+
+  # OpenSearch (security plugin disabled, in-cluster only), index "poi"
+  OPENSEARCH_URL: http://opensearch.data.svc.cluster.local:9200
+
+  # ClickHouse (HTTP), database "seruen"
+  CLICKHOUSE_URL: http://clickhouse.data.svc.cluster.local:8123
+
+  # MinIO / S3 API (boto3 endpoint_url), bucket "raw"
+  MINIO_ENDPOINT: http://minio.data.svc.cluster.local:9000
+  AWS_DEFAULT_REGION: us-east-1
+
+  # OSRM foot profile, Astana extract (the app falls back to OSRM_PUBLIC_URL if this fails)
+  OSRM_URL: http://osrm.data.svc.cluster.local:5000
+
+  # OpenTelemetry -> Tempo, OTLP HTTP (the app appends /v1/traces)
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo.observability:4318
+
+  # LLM
+  OPENAI_MODEL: gpt-6-luna
+  OPENAI_EMBED_MODEL: text-embedding-3-large
+  EMBED_DIM: "1024"

@@ -1,0 +1,36 @@
+# Public entry: https://seruen.<lb-ip-dashes>.sslip.io (host set by patches/ingress-host.yaml,
+# rendered by deploy/scripts/render-hosts.sh). TLS by cert-manager (letsencrypt-prod, HTTP-01).
+# SSE (/api/recommend): buffering off, long timeouts. service-upstream lets Linkerd balance per request.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: seruen
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: 2m
+    nginx.ingress.kubernetes.io/service-upstream: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - seruen.example.sslip.io
+      secretName: seruen-tls
+  rules:
+    - host: seruen.example.sslip.io
+      http:
+        paths:
+          - path: /partner
+            pathType: Prefix
+            backend:
+              service: {name: partner-portal, port: {number: 8000}}
+          - path: /v1/partner
+            pathType: Prefix
+            backend:
+              service: {name: partner-portal, port: {number: 8000}}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: orchestrator, port: {number: 8000}}

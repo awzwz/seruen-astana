@@ -1,0 +1,42 @@
+{
+  "title": "Seruen overview (placeholder)",
+  "uid": "seruen-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "30s",
+  "tags": ["seruen"],
+  "panels": [
+    {
+      "type": "timeseries", "title": "CPU by pod (namespace seruen)",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"seruen\", container!=\"\"}[5m]))", "legendFormat": "{{pod}}"}]
+    },
+    {
+      "type": "timeseries", "title": "Memory working set by pod (namespace seruen)",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}},
+      "targets": [{"refId": "A", "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"seruen\", container!=\"\"})", "legendFormat": "{{pod}}"}]
+    },
+    {
+      "type": "timeseries", "title": "Kafka consumer lag by group/topic",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum by (consumergroup, topic) (kafka_consumergroup_lag)", "legendFormat": "{{consumergroup}} / {{topic}}"}]
+    },
+    {
+      "type": "timeseries", "title": "Ingress requests/s by status",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum by (status) (rate(nginx_ingress_controller_requests[5m]))", "legendFormat": "{{status}}"}]
+    },
+    {
+      "type": "logs", "title": "Logs: namespace seruen",
+      "gridPos": {"x": 0, "y": 16, "w": 24, "h": 10},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [{"refId": "A", "expr": "{namespace=\"seruen\"}"}]
+    }
+  ]
+}

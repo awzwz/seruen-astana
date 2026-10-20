@@ -1,0 +1,30 @@
+# Extra scrape targets for Prometheus (kps). Applied by bootstrap.sh step observability.
+# Kafka consumer lag / topic offsets from the Strimzi Kafka Exporter.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kafka-exporter
+  namespace: data
+spec:
+  selector:
+    matchLabels:
+      strimzi.io/name: seruen-kafka-exporter
+  podMetricsEndpoints:
+    - port: tcp-prometheus
+      path: /metrics
+      interval: 30s
+---
+# MinIO cluster metrics (MINIO_PROMETHEUS_AUTH_TYPE=public, in-cluster only)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: minio
+  namespace: data
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+  podMetricsEndpoints:
+    - port: s3
+      path: /minio/v2/metrics/cluster
+      interval: 60s

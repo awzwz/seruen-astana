@@ -1,0 +1,11 @@
+# metrics-server (chart metrics-server/metrics-server), namespace kube-system.
+# DOKS does not ship it by default; needed for `kubectl top` and the HPAs of orchestrator/retrieval.
+args:
+  - --kubelet-preferred-address-types=InternalIP,Hostname,ExternalIP
+  - --kubelet-insecure-tls
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 192Mi

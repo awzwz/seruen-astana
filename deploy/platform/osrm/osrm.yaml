@@ -1,0 +1,70 @@
+# OSRM foot routing for Astana, namespace data. osrm.data:5000 (in-cluster only).
+# Data prep = Job osrm-prepare (osrm-prepare.yaml): Geofabrik Kazakhstan -> osmium clip to the Astana bbox
+# -> osrm-extract (foot.lua) -> osrm-partition -> osrm-customize, into PVC osrm-data. Then this Deployment serves MLD.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: osrm-data
+  namespace: data
+  labels: {app.kubernetes.io/name: osrm}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: do-block-storage
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: osrm
+  namespace: data
+  labels: {app.kubernetes.io/name: osrm}
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: osrm}
+  ports:
+    - {name: http, port: 5000, targetPort: 5000}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: osrm
+  namespace: data
+  labels: {app.kubernetes.io/name: osrm}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # RWO volume
+  selector:
+    matchLabels: {app.kubernetes.io/name: osrm}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: osrm}
+    spec:
+      containers:
+        - name: osrm
+          image: ghcr.io/project-osrm/osrm-backend:v26.10.0-debian
+          command: [osrm-routed]
+          args: [--algorithm, mld, --max-table-size, "1000", --port, "5000", /data/astana.osrm]
+          ports:
+            - {name: http, containerPort: 5000}
+          readinessProbe:
+            httpGet: {path: "/nearest/v1/foot/71.4305,51.1283", port: 5000}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: "/nearest/v1/foot/71.4305,51.1283", port: 5000}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 256Mi}
+            limits: {memory: 768Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: osrm-data

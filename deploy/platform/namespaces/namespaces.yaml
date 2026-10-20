@@ -1,0 +1,42 @@
+# Namespaces of the Seruen cluster.
+# seruen        - application services, workers, jobs (meshed by Linkerd)
+# data          - Kafka, PostgreSQL, OpenSearch, Redis, MinIO, ClickHouse, OSRM (never exposed outside)
+# platform      - operators and shared platform tools (Strimzi, CNPG, KEDA, Vault dev, Langfuse, Unleash)
+# observability - Prometheus, Grafana, Loki, Tempo, Alloy
+# argocd        - Argo CD
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: seruen
+  labels:
+    app.kubernetes.io/part-of: seruen
+  annotations:
+    linkerd.io/inject: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data
+  labels:
+    app.kubernetes.io/part-of: seruen
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform
+  labels:
+    app.kubernetes.io/part-of: seruen
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/part-of: seruen
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/part-of: seruen

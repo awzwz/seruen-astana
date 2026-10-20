@@ -1,0 +1,14 @@
+# Prometheus scrapes GET /metrics on port http of every online service (if the app exposes it;
+# a missing endpoint only shows the target as down).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: seruen-services
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: service
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

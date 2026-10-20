@@ -1,0 +1,23 @@
+# Databases for the optional Langfuse / Unleash (bootstrap.sh step "optional").
+# Their roles are declared in catalog.yaml (spec.managed.roles, passwords in secrets data/pg-langfuse, data/pg-unleash).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: langfuse
+  namespace: data
+spec:
+  name: langfuse
+  owner: langfuse
+  cluster:
+    name: catalog
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: unleash
+  namespace: data
+spec:
+  name: unleash
+  owner: unleash
+  cluster:
+    name: catalog

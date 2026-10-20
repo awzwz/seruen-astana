@@ -1,0 +1,19 @@
+# Scrapes the Linkerd proxy of every meshed pod in namespace seruen (port linkerd-admin :4191 /metrics):
+# request_total, response_latency_ms, tcp_* -> golden metrics in our Prometheus without linkerd-viz.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: linkerd-proxies
+  namespace: seruen
+spec:
+  selector:
+    matchExpressions:
+      - key: linkerd.io/control-plane-ns
+        operator: Exists
+  podMetricsEndpoints:
+    - port: linkerd-admin
+      path: /metrics
+      interval: 30s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          targetLabel: app

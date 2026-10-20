@@ -1,0 +1,43 @@
+# Argo CD (chart argo/argo-cd), namespace argocd. Slim: no Dex, no notifications, ApplicationSet scaled to 0.
+# UI: https://argocd.<ip-dashes>.sslip.io (TLS terminated by ingress-nginx, cert argocd-tls from cert-manager).
+# Hostname is injected by bootstrap.sh with --set. Admin password: secret argocd/argocd-initial-admin-secret
+# (copied to deploy/secrets/argocd.env).
+dex:
+  enabled: false
+notifications:
+  enabled: false
+applicationSet:
+  replicas: 0
+configs:
+  params:
+    server.insecure: true
+  cm:
+    timeout.reconciliation: 180s
+    exec.enabled: false
+    admin.enabled: true
+redis:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 192Mi}
+controller:
+  replicas: 1
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 768Mi}
+repoServer:
+  replicas: 1
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {memory: 512Mi}
+server:
+  replicas: 1
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 384Mi}
+  ingress:
+    enabled: true
+    controller: generic
+    ingressClassName: nginx
+    hostname: ""      # set by bootstrap.sh
+    tls: false
+    extraTls: []      # set by bootstrap.sh -> secret argocd-tls

@@ -1,0 +1,29 @@
+# Tempo single binary (chart grafana/tempo), namespace observability.
+# OTLP gRPC tempo.observability:4317, OTLP HTTP tempo.observability:4318, query API :3200. Retention 48h, 10Gi PVC.
+# The metrics generator writes service-graph / span metrics to Prometheus (remote write receiver enabled there).
+fullnameOverride: tempo
+tempo:
+  reportingEnabled: false
+  memBallastSizeMbs: 64
+  retention: 48h
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 768Mi}
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: http://kps-prometheus.observability:9090/api/v1/write
+  overrides:
+    defaults:
+      metrics_generator:
+        processors: [service-graphs, span-metrics]
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+persistence:
+  enabled: true
+  storageClassName: do-block-storage
+  size: 10Gi

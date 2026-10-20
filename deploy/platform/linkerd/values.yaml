@@ -1,0 +1,53 @@
+# Linkerd edge control plane (chart linkerd-edge/linkerd-control-plane), namespace linkerd.
+# Why edge: open-source Linkerd only publishes container images for edge releases; the brew CLI ("version-2.20")
+# renders cr.l5d.io/linkerd/*:version-2.20 images that do not exist.
+# Trust anchor + issuer come from deploy/secrets/linkerd/ (generated once with `step`, valid 1 year) via --set-file.
+# Gateway API CRDs are already installed by DOKS (Cilium), so linkerd-crds runs with installGatewayAPI=false.
+controllerReplicas: 1
+enablePodAntiAffinity: false
+enablePodDisruptionBudget: false
+disableHeartBeat: true
+proxy:
+  # Kubernetes native sidecars: proxy starts first and Jobs/CronJobs can complete.
+  nativeSidecar: true
+  resources:
+    cpu:
+      request: 10m
+    memory:
+      request: 20Mi
+      limit: 128Mi
+proxyInit:
+  resources:
+    cpu:
+      request: 10m
+    memory:
+      request: 10Mi
+      limit: 50Mi
+destinationResources:
+  cpu:
+    request: 20m
+  memory:
+    request: 64Mi
+    limit: 256Mi
+identityResources:
+  cpu:
+    request: 10m
+  memory:
+    request: 32Mi
+    limit: 128Mi
+proxyInjectorResources:
+  cpu:
+    request: 10m
+  memory:
+    request: 32Mi
+    limit: 128Mi
+heartbeatResources:
+  memory:
+    request: 16Mi
+policyController:
+  resources:
+    cpu:
+      request: 10m
+    memory:
+      request: 32Mi
+      limit: 128Mi

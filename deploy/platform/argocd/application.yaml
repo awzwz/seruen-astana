@@ -1,0 +1,23 @@
+# Argo CD Application for the Seruen app manifests (kustomize base deploy/apps).
+# Automated sync is DISABLED for now: sync manually from the UI or `argocd app sync seruen-apps`
+# once the image registry.digitalocean.com/seruen/seruen:latest exists.
+# Applied by deploy/scripts/argocd-repo.sh (only when the GitHub repo exists).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: seruen-apps
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/awzwz/seruen
+    targetRevision: main
+    path: deploy/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: seruen
+  syncPolicy:
+    # automated: {prune: true, selfHeal: true}   # enable later
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true

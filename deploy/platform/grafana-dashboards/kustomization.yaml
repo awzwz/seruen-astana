@@ -1,0 +1,15 @@
+# Grafana dashboards as ConfigMaps (picked up by the Grafana sidecar: label grafana_dashboard=1, any namespace).
+# App team: drop more *.json files here and add them to the generator below, then
+#   kubectl apply -k deploy/platform/grafana-dashboards
+# They appear in Grafana folder "Seruen" (annotation grafana_folder).
+namespace: observability
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Seruen
+configMapGenerator:
+  - name: dashboard-seruen-overview
+    files:
+      - seruen-overview.json

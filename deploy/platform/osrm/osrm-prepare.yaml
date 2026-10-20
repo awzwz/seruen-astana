@@ -1,0 +1,59 @@
+# One-off data preparation for OSRM (re-run: scale deploy/osrm to 0, delete this Job, apply again;
+# bootstrap.sh does that when FORCE_OSRM=1).
+# Astana bbox: 71.20,50.98 -> 71.75,51.30 (lon/lat).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: osrm-prepare
+  namespace: data
+  labels: {app.kubernetes.io/name: osrm-prepare}
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: osrm-prepare}
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: fetch-and-clip
+          image: debian:trixie-slim
+          command: [/bin/bash, -c]
+          args:
+            - |
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq && apt-get install -y -qq --no-install-recommends osmium-tool curl ca-certificates >/dev/null
+              cd /data
+              curl -fsSL --retry 5 -o kazakhstan.osm.pbf https://download.geofabrik.de/asia/kazakhstan-latest.osm.pbf
+              ls -lh kazakhstan.osm.pbf
+              # 'simple' strategy: one pass, low memory (complete_ways OOMs at 2Gi on the Kazakhstan file)
+              osmium extract --overwrite -s simple -b 71.20,50.98,71.75,51.30 kazakhstan.osm.pbf -o astana.osm.pbf
+              rm -f kazakhstan.osm.pbf
+              osmium fileinfo astana.osm.pbf | head -20
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 3Gi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      containers:
+        - name: osrm-build
+          image: ghcr.io/project-osrm/osrm-backend:v26.10.0-debian
+          command: [/bin/bash, -c]
+          args:
+            - |
+              set -euo pipefail
+              cd /data
+              rm -f astana.osrm*
+              osrm-extract -p /opt/foot.lua astana.osm.pbf
+              osrm-partition astana.osrm
+              osrm-customize astana.osrm
+              ls -lh /data
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 2Gi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: osrm-data

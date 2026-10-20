@@ -1,0 +1,45 @@
+# Creates the MinIO buckets (idempotent). bootstrap.sh deletes and re-applies this Job on every run.
+# raw      - raw source dumps of the collectors
+# langfuse - event/media storage for Langfuse (only used if Langfuse is installed)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-create-buckets
+  namespace: data
+  labels: {app.kubernetes.io/name: minio-create-buckets}
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: minio-create-buckets}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: aws
+          image: amazon/aws-cli:2.38.2
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -e
+              S3="aws --endpoint-url http://minio.data:9000"
+              until $S3 s3 ls >/dev/null 2>&1; do echo "waiting for minio"; sleep 3; done
+              for b in raw langfuse; do
+                if $S3 s3api head-bucket --bucket "$b" >/dev/null 2>&1; then echo "bucket $b exists";
+                else $S3 s3 mb "s3://$b"; fi
+              done
+              $S3 s3 ls
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: minio-auth, key: MINIO_ROOT_USER}}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: minio-auth, key: MINIO_ROOT_PASSWORD}}
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: AWS_REQUEST_CHECKSUM_CALCULATION
+              value: when_required
+            - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+              value: when_required
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}

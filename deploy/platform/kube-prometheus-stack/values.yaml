@@ -1,0 +1,141 @@
+# kube-prometheus-stack (slim), namespace observability. Release name "kps".
+# Prometheus: kps-prometheus.observability:9090 (retention 2d, 10Gi), Grafana via Ingress grafana.<ip>.sslip.io (TLS).
+# Hostnames are injected by bootstrap.sh with --set (they depend on the LB IP).
+fullnameOverride: kps
+crds:
+  enabled: true
+
+# DOKS control plane is managed; Cilium replaces kube-proxy.
+kubeEtcd: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeProxy: {enabled: false}
+defaultRules:
+  create: true
+  rules:
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    replicas: 1
+    retention: 48h
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 128Mi}
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  prometheusConfigReloader:
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {memory: 64Mi}
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    retention: 2d
+    retentionSize: 8GB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    # pick up ServiceMonitors/PodMonitors/rules from every namespace, not only those labelled for this release
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    # Tempo's metrics generator writes span metrics / service graph here
+    enableRemoteWriteReceiver: true
+    enableFeatures:
+      - exemplar-storage
+    resources:
+      requests: {cpu: 200m, memory: 1Gi}
+      limits: {memory: 2Gi}
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: do-block-storage
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 10Gi
+
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 10m, memory: 24Mi}
+    limits: {memory: 64Mi}
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+    limits: {memory: 192Mi}
+
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: false
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 768Mi}   # ~490Mi in use after start (3 sidecars + Grafana 13)
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    # hosts / tls hosts set by bootstrap.sh: grafana.<ip-dashes>.sslip.io, secret grafana-tls (cert-manager Certificate)
+    hosts: []
+    tls: []
+  grafana.ini:
+    analytics:
+      check_for_updates: false
+      reporting_enabled: false
+    users:
+      default_theme: dark
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+    datasources:
+      enabled: true
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.observability:3100
+      jsonData:
+        maxLines: 1000
+        derivedFields:
+          - name: TraceID
+            matcherRegex: '"?trace_?[iI][dD]"?[:=]\s*"?(\w+)'
+            url: "$${__value.raw}"
+            datasourceUid: tempo
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      access: proxy
+      url: http://tempo.observability:3200
+      jsonData:
+        tracesToLogsV2:
+          datasourceUid: loki
+          filterByTraceID: true
+          spanStartTimeShift: "-5m"
+          spanEndTimeShift: "5m"
+        serviceMap:
+          datasourceUid: prometheus
+        nodeGraph:
+          enabled: true
+        lokiSearch:
+          datasourceUid: loki
