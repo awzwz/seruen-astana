@@ -23,7 +23,9 @@ def is_unnamed(poi: POI) -> bool:
     """OSM objects without a real name get the category label as name ("Детская площадка") — weak as advice."""
     n = (poi.name.ru or poi.name.kk or poi.name.en or "").strip().lower()
     labels = {v[k].lower() for v in CATEGORIES.values() for k in ("ru", "kk", "en")}
-    return not n or n in labels
+    generic = {"декоративный объект", "скульптура", "арт-объект", "арт объект", "памятник", "фонтан", "стела", "мурал",
+               "детская площадка", "сквер", "парк", "кафе", "кофейня", "бар"}
+    return not n or n in labels or n in generic
 
 
 def want_strength(poi: POI, c: Constraints) -> dict[str, float]:
@@ -94,6 +96,8 @@ def popularity(poi: POI) -> float:
         s = max(s, 0.8)
     if p.overture_confidence:
         s = max(s, 0.3 * p.overture_confidence)
+    if p.reviews:            # 2GIS: 4.8★ from 3 000 reviews ≈ 0.95; 4.0★ from 20 reviews ≈ 0.3
+        s = max(s, min(1.0, math.log1p(p.reviews) / math.log(2000)) * ((p.rating or 4.0) / 5.0))
     return round(s, 3)
 
 

@@ -33,7 +33,7 @@ _T = {
 }
 
 SRC_LABEL = {"osm": "OpenStreetMap", "overture": "Overture Maps", "wikidata": "Wikidata", "wikivoyage": "Wikivoyage",
-             "visitastana": "visitastana.kz", "sxodim": "sxodim.com", "seruen-curated": "Seruen", "partner": "заведение"}
+             "visitastana": "visitastana.kz", "sxodim": "sxodim.com", "seruen-curated": "Seruen", "partner": "заведение", "2gis": "2GIS"}
 
 
 def t(key: str, lang: str, **kw) -> str:
@@ -102,8 +102,16 @@ def status_at(poi: POI, arrive: datetime, visit_min: int, lang: str = "ru", is_d
         usual = {"ru": "Обычно открыто до {t}", "kk": "Әдетте {t} дейін ашық", "en": "Usually open until {t}"}[lang]
         stale = {"ru": "данные {src} ({d}) могли устареть", "kk": "{src} деректері ({d}) ескірген болуы мүмкін",
                  "en": "{src} data ({d}) may be outdated"}[lang]
-        label = (usual.format(t=until) if until else t("low", lang, raw=h.raw[:40])) + " · " + stale.format(src=src, d=_fmt_date(h.as_of))
-    if level == "high":
+        if until:
+            head = usual.format(t=until)
+        elif "24/7" in h.raw:
+            head = {"ru": "Обычно круглосуточно", "kk": "Әдетте тәулік бойы", "en": "Usually open 24/7"}[lang]
+        else:
+            head = {"ru": "Обычно открыто в это время", "kk": "Әдетте бұл уақытта ашық", "en": "Usually open at this time"}[lang]
+        label = head + " · " + stale.format(src=src, d=_fmt_date(h.as_of))
+    if level == "high" and h.src == "2gis":
+        label += " · " + {"ru": "по данным 2GIS", "kk": "2GIS деректері", "en": "per 2GIS"}[lang]
+    elif level == "high":
         label += " · " + t("high_src", lang, d=_fmt_date(h.as_of))
     elif level == "medium":
         label += " · " + t("medium_src", lang, src=src, d=_fmt_date(h.as_of))

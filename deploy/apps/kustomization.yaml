@@ -26,6 +26,7 @@ resources:
   - services/events-api.yaml
   - services/feedback-api.yaml
   - services/partner-portal.yaml
+  - services/places-live.yaml
   - workers/normalizer.yaml
   - workers/dedup.yaml
   - workers/quality.yaml

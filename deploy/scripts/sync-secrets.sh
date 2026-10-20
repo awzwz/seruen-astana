@@ -41,6 +41,9 @@ KEY=$(dotenv_get "$ENV_FILE" OPENAI_API_KEY || true)
 [[ -n "$KEY" ]] || warn "OPENAI_API_KEY is empty in $ENV_FILE (template fallback only)"
 {
   printf 'OPENAI_API_KEY=%s\n' "$KEY"
+  DG=$(dotenv_get "$ENV_FILE" DGIS_API_KEY || true)
+  [[ -n "$DG" ]] && printf 'DGIS_API_KEY=%s\n' "$DG"
+  unset DG
   if [[ -f "$SECRETS_DIR/clickhouse.env" ]]; then
     printf 'CLICKHOUSE_USER=%s\n' "$(env_get "$SECRETS_DIR/clickhouse.env" CLICKHOUSE_USER)"
     printf 'CLICKHOUSE_PASSWORD=%s\n' "$(env_get "$SECRETS_DIR/clickhouse.env" CLICKHOUSE_PASSWORD)"

@@ -96,6 +96,8 @@ class Popularity(BaseModel):
     sources_confirming: int = 1
     curated_in: list[str] = Field(default_factory=list)
     overture_confidence: Optional[float] = None
+    rating: Optional[float] = None       # 2GIS live rating (shown, never stored)
+    reviews: int = 0
 
 
 class Confidence(BaseModel):
@@ -260,6 +262,8 @@ class Card(BaseModel):
     description_ai: bool = False
     url: Optional[str] = None
     event: Optional[dict] = None
+    rating: Optional[float] = None
+    reviews: int = 0
     score: float = 0.0
     score_parts: dict[str, float] = Field(default_factory=dict)
     status: Status = "active"

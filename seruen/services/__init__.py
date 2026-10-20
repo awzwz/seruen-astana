@@ -2,7 +2,7 @@
 import importlib
 
 SERVICES = ["orchestrator", "session", "context", "nlu", "retrieval", "ranking", "routing", "explain", "guard",
-            "llm-gateway", "catalog-api", "events-api", "feedback-api", "partner-portal"]
+            "llm-gateway", "catalog-api", "events-api", "feedback-api", "partner-portal", "places-live"]
 
 
 def module_name(service: str) -> str:

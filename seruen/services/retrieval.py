@@ -5,6 +5,7 @@ local mode / fallback: the in-memory snapshot with the same scoring.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from collections import Counter
 from datetime import datetime, timedelta
@@ -162,6 +163,66 @@ def events_near(lat, lon, radius, now: datetime, horizon_min: int) -> list[dict]
     return out[:5]
 
 
+def merge_live(rows: list[dict], live: list[dict], lat: float, lon: float, c: Constraints, ctx: Context,
+               excluded: Counter, from_wants: bool) -> tuple[list[dict], int, int]:
+    """Fuse live 2GIS places into the candidates. Same place in both (≤ 80 m and similar name) → one card:
+    our open-data record keeps its id/sources, 2GIS adds fresh hours, rating and accessibility. Nothing is stored."""
+    from rapidfuzz import fuzz
+
+    from seruen.common.catalog import norm
+
+    import re
+
+    def nm(x: str) -> str:   # "Монумент-Бәйтерек" → "monument baiterek"
+        return re.sub(r"[^\w]+", " ", norm(x)).strip()
+
+    merged = added = 0
+    idx = [(r, nm(r["poi"].name.best("ru"))) for r in rows]
+    for d in live:
+        lp = POI(**d)
+        ln = nm(lp.name.best("ru"))
+        twin = None
+        for r, rn in idx:
+            if not (rn and ln):
+                continue
+            d_m = haversine_m(lp.lat, lp.lon, r["poi"].lat, r["poi"].lon)
+            if d_m > 200:
+                continue
+            sim = fuzz.token_set_ratio(rn, ln)
+            if (sim >= 90 and d_m <= 200) or (sim >= 75 and d_m <= 80):   # big objects: 2GIS pin and OSM centroid differ
+                twin = r
+                break
+        if twin is not None:
+            tp = twin["poi"].model_copy(deep=True)   # never mutate the shared snapshot
+            twin["poi"] = tp
+            if lp.opening_hours and (not tp.opening_hours or tp.opening_hours.level != "high"):
+                tp.opening_hours = lp.opening_hours
+            tp.popularity.rating, tp.popularity.reviews = lp.popularity.rating, lp.popularity.reviews
+            for k in ("wheelchair", "wifi"):
+                if k in lp.attributes and k not in tp.attributes:
+                    tp.attributes[k] = lp.attributes[k]
+            tp.walk_tags = sorted(set(tp.walk_tags) | set(lp.walk_tags))
+            if tp.category == "other":
+                tp.category = lp.category
+            tp.sources = tp.sources + lp.sources
+            tp.popularity.sources_confirming += 1
+            merged += 1
+            continue
+        why = hard_filter(lp, c, ctx)
+        if why:
+            excluded[why] += 1
+            continue
+        dist = haversine_m(lat, lon, lp.lat, lp.lon)
+        # no embeddings for live places: 2GIS already ranked them for a query built from the user's wishes
+        sem = 0.5 if from_wants else 0.35
+        mw = matched_wants(lp, c)
+        rows.append({"poi": lp, "distance_m": dist, "semantic": sem, "lexical": 0.0,
+                     "_pre": 0.5 * sem + 0.2 * (1.0 if mw else 0.0)})
+        added += 1
+    rows.sort(key=lambda x: -x["_pre"])
+    return rows[: LIMIT + 20], merged, added
+
+
 @endpoint("retrieval", "/v1/candidates")
 async def candidates(p: dict) -> dict:
     t0 = time.perf_counter()
@@ -170,30 +231,50 @@ async def candidates(p: dict) -> dict:
     c = Constraints(**p["constraints"])
     ctx = Context(**p["context"])
     qtext = query_string(c)
+
+    async def live_call(r_m: float) -> dict:
+        try:
+            return await call("places-live", "/v1/nearby", {"lat": lat, "lon": lon, "radius_m": r_m, "wants": c.wants,
+                                                            "kids": c.kids > 0, "night": c.night, "mode": ctx.mode}, timeout=4)
+        except Exception:
+            return {"pois": [], "stats": {"enabled": False, "reason": "unavailable"}}
+
+    live_task = asyncio.create_task(live_call(radius))     # 2GIS runs in parallel with our own catalog search
     qvec = np.asarray(p["query_vector"], dtype=np.float32) if p.get("query_vector") else await query_vector(qtext)
     backend = "snapshot"
     if settings().opensearch_url:
         try:
-            rows, excluded = _opensearch(lat, lon, radius, c, ctx, qvec, qtext)
+            rows, excluded = await asyncio.to_thread(_opensearch, lat, lon, radius, c, ctx, qvec, qtext)
             backend = "opensearch"
         except Exception:
-            rows, excluded = _local(lat, lon, radius, c, ctx, qvec, qtext)
+            rows, excluded = await asyncio.to_thread(_local, lat, lon, radius, c, ctx, qvec, qtext)
             backend = "snapshot (OpenSearch unavailable)"
     else:
-        rows, excluded = _local(lat, lon, radius, c, ctx, qvec, qtext)
+        rows, excluded = await asyncio.to_thread(_local, lat, lon, radius, c, ctx, qvec, qtext)
+    live = await live_task
+    rows, merged, added = merge_live(rows, live.get("pois", []), lat, lon, c, ctx, excluded, bool(c.wants or c.kids or c.night))
     expanded = False
-    if len(rows) < 6 and radius < 4000:
-        radius2 = radius * 1.6
-        rows2, ex2 = (_local if backend.startswith("snapshot") else _opensearch)(lat, lon, radius2, c, ctx, qvec, qtext)
+    for factor in (1.6, 2.5):        # outskirts: widen the circle step by step, the card then says how far it is
+        if len(rows) >= 6 or radius >= 5000:
+            break
+        radius2 = radius * factor
+        rows2, ex2 = await asyncio.to_thread(_local if backend.startswith("snapshot") else _opensearch,
+                                             lat, lon, radius2, c, ctx, qvec, qtext)
+        live2 = await live_call(radius2) if len(live.get("pois", [])) < 6 else live
+        rows2, m2, a2 = merge_live(rows2, live2.get("pois", []), lat, lon, c, ctx, ex2, bool(c.wants or c.kids or c.night))
         if len(rows2) > len(rows):
-            rows, excluded, radius, expanded = rows2, ex2, radius2, True
+            rows, excluded, radius, expanded, live, merged, added = rows2, ex2, radius2, True, live2, m2, a2
     now = datetime.fromisoformat(ctx.local_time)
     evs = events_near(lat, lon, radius, now, c.time_budget_min)
+    ls = live.get("stats", {})
     return {
-        "candidates": [{"poi": r["poi"].model_dump(), "distance_m": round(r["distance_m"]), "semantic": round(r["semantic"], 4),
-                        "lexical": round(r["lexical"], 4)} for r in rows],
+        "candidates": [{"poi": r["poi"].model_dump(mode="json"), "distance_m": round(r["distance_m"]),
+                        "semantic": round(r["semantic"], 4), "lexical": round(r["lexical"], 4)} for r in rows],
         "events": evs,
         "named_far": named_far(lat, lon, radius, c),
         "stats": {"backend": backend, "radius_m": round(radius), "expanded": expanded, "kept": len(rows),
-                  "excluded": dict(excluded), "vector": qvec is not None, "ms": round((time.perf_counter() - t0) * 1000)},
+                  "excluded": dict(excluded), "vector": qvec is not None,
+                  "live": {"source": "2GIS", "enabled": ls.get("enabled", False), "queries": ls.get("queries", []),
+                           "items": ls.get("items", 0), "merged": merged, "added": added, "reason": ls.get("reason")},
+                  "ms": round((time.perf_counter() - t0) * 1000)},
     }

@@ -138,7 +138,7 @@ async def recommend_stream(req: RecommendRequest):
         cand = await _step(trace, "Поиск: радиус + слова + смысл", "retrieval", call("retrieval", "/v1/candidates", {
             "origin": {"lat": lat, "lon": lon}, "radius_m": radius, "constraints": c.model_dump(),
             "context": ctx.model_dump(), "query_vector": qvec}, timeout=8),
-            lambda r: f"{r['stats']['backend']} · радиус {r['stats']['radius_m']} м · подходят {r['stats']['kept']}"
+            lambda r: f"{r['stats']['backend']} + 2GIS live ({r['stats']['live']['items']} мест, склеено {r['stats']['live']['merged']}) · радиус {r['stats']['radius_m']} м · подходят {r['stats']['kept']}"
                       + (" · исключены " + ", ".join(f"{k}: {v}" for k, v in r["stats"]["excluded"].items()) if r["stats"]["excluded"] else ""))
         if not cand["candidates"]:
             yield _sse("cards", {"items": [], "route": None, "origin": {"lat": lat, "lon": lon, "cell": req.cell},
@@ -181,7 +181,7 @@ async def recommend_stream(req: RecommendRequest):
             for r in ranked:
                 poi = POI(**by_id[r["poi_id"]]["poi"])
                 st = status_at(poi, start + timedelta(minutes=r["est_walk_min"]), poi.visit_min, lang, ctx.is_dark, ctx.is_holiday)
-                if st.status not in ("closed",):
+                if st.status not in ("closed", "closes_soon"):
                     final_ids.append(poi.poi_id)
                 if len(final_ids) == 3:
                     break
@@ -201,7 +201,9 @@ async def recommend_stream(req: RecommendRequest):
         matched_map, reasons_map = {}, {}
         rank_map = {r["poi_id"]: r for r in ranked}
         for pid in final_ids:
-            poi = POI(**(fresh.get(pid) or by_id[pid]["poi"]))
+            cand_poi = by_id[pid]["poi"]
+            live_data = any(s.get("name") == "2gis" for s in cand_poi.get("sources", []))
+            poi = POI(**(cand_poi if live_data or pid not in fresh else fresh[pid]))
             dist = by_id[pid]["distance_m"]
             wm = rt["walk"].get(pid, {}).get("minutes") or walk_estimate(dist, slow)[1]
             arrive = datetime.strptime(timeline[pid]["arrive"], "%H:%M").replace(
@@ -219,6 +221,7 @@ async def recommend_stream(req: RecommendRequest):
                         description=poi.description.text if poi.description else None,
                         description_ai=bool(poi.description and poi.description.ai_generated),
                         url=poi.website or (poi.description.url if poi.description else None),
+                        rating=poi.popularity.rating, reviews=poi.popularity.reviews,
                         score=r.get("score", 0.0), score_parts=r.get("parts", {}), status=poi.status,
                         role=roles.get(pid, "pick"))
             cards.append(card)
@@ -266,6 +269,11 @@ async def recommend_stream(req: RecommendRequest):
         mode = "template"
         model = None
         sent, not_sent = [], ["координаты и клетка", "ID сессии", "IP-адрес", "история запросов"]
+        live_st = cand["stats"].get("live", {})
+        if live_st.get("enabled") and live_st.get("queries"):
+            sent_2gis = "в 2GIS: центр клетки ~150 м и тип мест (" + ", ".join(live_st["queries"]) + ")"
+        else:
+            sent_2gis = None
         expl: dict[str, Explanation] = {}
         if not req.no_ai and cards:
             sent = ["текст запроса", "фильтры и теги", "режим погоды и время суток", f"факты о {len(cards)} выбранных местах"]
@@ -294,10 +302,12 @@ async def recommend_stream(req: RecommendRequest):
         trace.append(TraceStep(name="Итого", service="orchestrator", ms=round((time.perf_counter() - t_start) * 1000, 1),
                                detail=f"{len(cards)} карточки · режим {mode}"))
         yield _sse("trace", {"steps": [s.model_dump() for s in trace], "sent_to_llm": sent, "not_sent": not_sent,
-                             "model": model, "mode": mode, "radius_m": round(radius)})
+                             "sent_to_2gis": sent_2gis, "model": model, "mode": mode, "radius_m": round(radius)})
         yield _sse("done", {"request_id": rid, "ai_generated": mode != "template", "fallback": mode != "ai"})
         publish("reco.served", rid, {"h3_r8": h3_cell(lat, lon, 8), "hour": ctx.local_time[11:13], "lang": lang,
-                                     "mode": ctx.mode, "wants": c.wants, "kids": bool(c.kids), "poi_ids": [x.poi_id for x in cards],
+                                     "mode": ctx.mode, "wants": c.wants, "kids": bool(c.kids),
+                                     # live 2GIS ids are not kept anywhere (their terms forbid storing)
+                                     "poi_ids": [x.poi_id for x in cards if not x.poi_id.startswith("2gis:")],
                                      "categories": [x.category for x in cards], "ai": mode != "template"})
         if req.session_id:
             try:

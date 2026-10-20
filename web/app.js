@@ -9,7 +9,7 @@
 
   /* ------------------------------------------------------------ constants */
   const ASTANA = {lat: 51.128, lon: 71.430};
-  const ASTANA_BBOX = {s: 50.93, n: 51.33, w: 71.10, e: 71.80};
+  const ASTANA_BBOX = {s: 50.82, n: 51.42, w: 70.95, e: 71.95};   // Astana agglomeration
   const WALK_FACTOR = 1.3;          // straight line → walking distance
   const WALK_M_PER_MIN = 75;        // 4.5 km/h
   const STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/liberty';
@@ -492,12 +492,11 @@
       btn.removeAttribute('aria-busy');
       btn.classList.remove('is-loading');
       const c = pos.coords;
-      if (!inAstana(c.latitude, c.longitude)) {
+      setOrigin({lat: c.latitude, lon: c.longitude, source: 'geo', acc: c.accuracy});
+      if (!inAstana(c.latitude, c.longitude)) {   // never block: the search widens step by step and 2GIS covers the outskirts
         state.originMsgKey = {key: 'geo_outside', tone: 'warn'};
         renderMsgs();
-        return;
       }
-      setOrigin({lat: c.latitude, lon: c.longitude, source: 'geo', acc: c.accuracy});
     }, (err) => {
       btn.removeAttribute('aria-busy');
       btn.classList.remove('is-loading');
@@ -1355,7 +1354,9 @@
         '</header>' +
       '<p class="facts"><span class="fact" title="' + esc(t('card_walk_title')) + '">' + icon('walk') +
         esc(t('card_walk', {min: walk.min, dist: fmtDist(walk.m)})) + '</span>' +
-        (card.visit_min ? '<span class="fact">' + icon('clock') + esc(t('visit', {n: card.visit_min})) + '</span>' : '') + '</p>' +
+        (card.visit_min ? '<span class="fact">' + icon('clock') + esc(t('visit', {n: card.visit_min})) + '</span>' : '') +
+        (card.rating ? '<span class="fact fact-rating" title="2GIS">★ ' + esc(fmtNum(card.rating, 1)) + ' · ' +
+          esc(fmtNum(card.reviews || 0, 0)) + ' ' + esc({ru: 'отзывов в 2GIS', kk: '2GIS пікірі', en: 'reviews on 2GIS'}[state.lang] || 'отзывов в 2GIS') + '</span>' : '') + '</p>' +
       (card.kind === 'event' ? '' : hoursHTML(card.hours)) + statusWarn + accessHTML(card) + eventHTML(card) +
       (card.description ? '<p class="desc">' + esc(card.description) + (card.description_ai ? ' <span class="tag tag-ai-sm">' + icon('sparkle') + esc(t('desc_ai')) + '</span>' : '') + '</p>' : '') +
       '<div class="exp' + (exp && animate ? ' exp-in' : '') + '" id="exp-' + i + '" aria-live="polite">' + expBody + '</div>' +
