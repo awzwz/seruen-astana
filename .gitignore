@@ -21,3 +21,6 @@ design/sample-data*.json
 design/src/f-data.json
 docs/TEST_SCENARIOS*.json
 .backup/
+
+# launch / demo video renders (large binaries)
+brag-output*/
