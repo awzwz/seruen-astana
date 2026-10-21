@@ -30,7 +30,7 @@ class Settings:
         # voice input: best ru + kk accuracy in our test (20.10.2026); whisper-1 is the fallback
         self.stt_model = e("OPENAI_STT_MODEL", "gpt-4o-transcribe")
         self.stt_fallback_model = e("OPENAI_STT_FALLBACK_MODEL", "whisper-1")
-        self.stt_timeout = float(e("STT_TIMEOUT_S", "15"))
+        self.stt_timeout = float(e("STT_TIMEOUT_S", "35"))
         self.stt_daily_limit = int(e("STT_DAILY_LIMIT", "3000"))
         self.kafka = e("KAFKA_BOOTSTRAP", "")
         self.pg_host = e("PG_HOST", "")

@@ -17,7 +17,7 @@ Entrypoint `python -m seruen.run`, role chosen by the env var `SERVICE` (service
 
 | name | endpoints |
 |---|---|
-| `orchestrator` | `POST /api/recommend` (SSE), `POST /api/transcribe?lang=ru|kk|en` (raw audio body ≤ 1.9 MB → `{ok, text, model}`), `GET /api/where`, `GET /api/suggest`, `GET /api/landmarks`, `POST /api/feedback`, `DELETE /api/session/{id}`, `GET /api/health`, serves `web/` at `/` |
+| `orchestrator` | `POST /api/recommend` (SSE), `POST /api/transcribe?lang=ru|kk|en` (raw audio body ≤ 7.5 MB, up to 2 min → `{ok, text, model}`), `GET /api/where`, `GET /api/suggest`, `GET /api/landmarks`, `POST /api/feedback`, `DELETE /api/session/{id}`, `GET /api/health`, serves `web/` at `/` |
 | `session` | `POST /v1/session/get`, `POST /v1/session/put`, `DELETE /v1/session/{id}` (Redis, TTL 30 min) |
 | `context` | `POST /v1/context {cell, sim}` → `Context` |
 | `nlu` | `POST /v1/parse {text, chips, lang, prev}` → `Constraints` |

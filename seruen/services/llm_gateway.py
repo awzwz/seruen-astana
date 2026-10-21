@@ -102,7 +102,7 @@ async def embed(p: dict) -> dict:
 
 AUDIO_EXT = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "mp4", "audio/x-m4a": "m4a", "audio/m4a": "m4a",
              "audio/aac": "m4a", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/x-wav": "wav"}
-MAX_AUDIO_BYTES = 4 * 1024 * 1024
+MAX_AUDIO_BYTES = 8 * 1024 * 1024
 
 
 def _stt_quota_ok() -> bool:

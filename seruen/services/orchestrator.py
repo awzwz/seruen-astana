@@ -476,7 +476,7 @@ VOICE_HINT = {
     "kk": "Астанада серуен: Хан Шатыр, Бәйтерек, Керуен, ЭКСПО, Мега Силк Уэй, Нұрлы Жол, кофе, баламен, ұшар алдында.",
     "en": "A walk in Astana: Khan Shatyr, Baiterek, Keruen, EXPO, Mega Silk Way, Nurly Zhol, Astana Opera, coffee, with kids, before my flight.",
 }
-MAX_VOICE_BYTES = 1_900_000        # ~30 s of speech; the ingress allows 2 MB
+MAX_VOICE_BYTES = 7_500_000        # up to 2 min of speech at any browser bitrate; the ingress allows 8 MB
 
 
 def extra(app: FastAPI) -> None:
@@ -497,7 +497,7 @@ def extra(app: FastAPI) -> None:
         payload = {"audio_b64": base64.b64encode(body).decode(), "mime": request.headers.get("content-type", "audio/webm"),
                    "lang": lang, "prompt": VOICE_HINT[lang]}
         try:
-            r = await call("llm-gateway", "/v1/transcribe", payload, timeout=25)
+            r = await call("llm-gateway", "/v1/transcribe", payload, timeout=45)
         except ServiceError:
             return JSONResponse({"ok": False, "error": "unavailable"}, status_code=503)
         if not r.get("ok"):

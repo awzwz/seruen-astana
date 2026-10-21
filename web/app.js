@@ -2040,12 +2040,12 @@
   }
 
   /* ------------------------------------------------------------ voice input: speech → text (OpenAI), the audio is not kept */
-  const VOICE_MAX_MS = 30000;        // the server takes ~30 s of speech
-  const VOICE_SILENCE_MS = 1600;     // a pause after speech ends the recording, like iOS dictation
-  const VOICE_MIN_MS = 700;
+  const VOICE_MAX_MS = 120000;       // up to 2 minutes; the person stops the recording with ■ (pauses do not end it)
+  const VOICE_WARN_MS = 15000;       // the last 15 s show a countdown
+  const VOICE_MAX_BYTES = 7500000;   // the server accepts up to 7.5 MB
   // Whisper-style hallucinations on silence or noise: never put them into the search field
   const VOICE_JUNK = /субтитр|продолжение следует|спасибо за просмотр|подписывайтесь|thanks for watching|subtitles by/i;
-  const voice = {state: 'idle', rec: null, stream: null, ctx: null, chunks: [], mime: '', t0: 0, timer: null, raf: 0, heard: false, quietSince: 0, cancelled: false};
+  const voice = {state: 'idle', rec: null, stream: null, ctx: null, chunks: [], mime: '', t0: 0, timer: null, raf: 0, cancelled: false};
 
   function voiceSupported() {
     return !state.mock && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
@@ -2093,7 +2093,7 @@
       setVoiceMsg(e && (e.name === 'NotAllowedError' || e.name === 'SecurityError') ? 'voice_denied' : 'voice_nomic', 'warn');
       return;
     }
-    Object.assign(voice, {stream: stream, chunks: [], mime: pickMime(), heard: false, quietSince: 0, cancelled: false});
+    Object.assign(voice, {stream: stream, chunks: [], mime: pickMime(), cancelled: false});
     try {
       voice.rec = new window.MediaRecorder(stream, voice.mime ? {mimeType: voice.mime, audioBitsPerSecond: 48000} : undefined);
     } catch (e) {
@@ -2115,11 +2115,12 @@
   function voiceTick() {
     const ms = performance.now() - voice.t0;
     const s = Math.floor(ms / 1000);
-    $('#q').placeholder = t('voice_listening', {s: Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')});
+    const left = Math.ceil((VOICE_MAX_MS - ms) / 1000);
+    $('#q').placeholder = VOICE_MAX_MS - ms <= VOICE_WARN_MS ? t('voice_left', {n: Math.max(0, left)})
+      : t('voice_listening', {s: Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')});
     if (ms >= VOICE_MAX_MS) voiceStop(false);
-    else if (voice.heard && voice.quietSince && performance.now() - voice.quietSince > VOICE_SILENCE_MS && ms > VOICE_MIN_MS) voiceStop(false);
   }
-  // live level for the pulsing button + end-of-speech detection
+  // live level for the pulsing button
   function voiceMeter(stream) {
     try {
       if (!voice.ctx) return;
@@ -2134,8 +2135,6 @@
         for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
         const rms = Math.sqrt(sum / buf.length);
         b.style.setProperty('--lvl', Math.min(1, rms * 7).toFixed(2));
-        if (rms > 0.035) { voice.heard = true; voice.quietSince = 0; }
-        else if (voice.heard && !voice.quietSince) voice.quietSince = performance.now();
         voice.raf = requestAnimationFrame(loop);
       };
       loop();
@@ -2172,6 +2171,7 @@
     if (voice.cancelled) { finish(null); return; }
     const blob = new Blob(chunks, {type: type});
     if (!blob.size || dur < 400) { finish('voice_empty'); return; }
+    if (blob.size > VOICE_MAX_BYTES) { finish('voice_error'); return; }
     try {
       const r = await fetch('/api/transcribe?lang=' + encodeURIComponent(state.lang), {method: 'POST', headers: {'Content-Type': type}, body: blob});
       const j = await r.json().catch(() => ({}));
